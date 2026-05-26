@@ -20,6 +20,9 @@ Firestore - for database and backend
 ## 🎯 Objective
 Help my aunt and many other small businesess to manage products easily, restock in time, and keep things in check!
 
+## 🚀 Deploy
+[Site deployed with Firebase Hosting](https://produkti-web.web.app/)
+
 ## Author's Note
 Howdy mates! Y'all may call me Globall 👋
 
