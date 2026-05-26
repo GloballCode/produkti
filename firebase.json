@@ -1,0 +1,25 @@
+{
+  "firestore": {
+    "database": "(default)",
+    "location": "southamerica-east1",
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "hosting": {
+    "public": "public",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ]
+  },
+  "auth": {
+    "providers": {
+      "emailPassword": true,
+      "googleSignIn": {
+        "oAuthBrandDisplayName": "Produkti App",
+        "supportEmail": "suporte@produkti.web.app"
+      }
+    }
+  }
+}
