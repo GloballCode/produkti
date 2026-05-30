@@ -3,14 +3,14 @@ const CACHE_NAME = 'produkti-v1.0.0';
 const urlsToCache = [
   '/',
   '/produkti.html',
-  '/public/style.css',
-  '/public/app.js',
-  '/public/firebase.js',
-  '/public/services/authService.js',
-  '/public/services/firestoreService.js',
-  '/manifest.json',
-  '/icon-192.png',
-  '/icon-512.png'
+  '/style.css',
+  '/app.js',
+  '/firebase.js',
+  '/services/authService.js',
+  '/services/firestoreService.js',
+  '../manifest.json',
+  '../icon-192.png',
+  '../icon-512.png'
 ];
 
 // ===== INSTALAÇÃO =====

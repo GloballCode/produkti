@@ -4,13 +4,13 @@ let uploadedImageUrl = "";
 
 import {
   doc,
-  deleteDoc
+  deleteDoc,
+  updateDoc
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 import { db } from "./firebase.js";
 
 import {
-  loginEmail,
   loginGoogle,
   observeAuth
 } from "./services/authService.js";
@@ -64,23 +64,7 @@ observeAuth(async (user) => {
   }
 });
 
-// ===== LOGIN (mantido compatível) =====
-window.doLogin = async function () {
-  const email = document.getElementById('login-email').value.trim();
-  const pass = document.getElementById('login-pass').value;
-
-  if (!email || !pass) {
-    showToast('Preencha email e senha');
-    return;
-  }
-
-  try {
-    await loginEmail(email, pass);
-    showToast('✅ Login realizado!');
-  } catch (e) {
-    showToast('Erro: ' + e.message);
-  }
-};
+// ===== LOGIN (apenas Google) =====
 
 // ===== FIREBASE LOAD =====
 async function loadBusinesses() {
@@ -339,21 +323,23 @@ window.reporEstoque = function(id) {
 
   const modal = document.createElement('div');
   modal.className = 'modal-overlay open';
+  modal.id = `modal-repor-${id}`;
   modal.innerHTML = `
     <div class="modal-content">
       <div class="modal-header">
         <h3>Reposição de estoque</h3>
-        <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">×</button>
+        <button class="modal-close" onclick="document.getElementById('modal-repor-${id}').remove()">×</button>
       </div>
       <div class="modal-body">
         <p>Produto: <strong>${produto.nome}</strong></p>
+        <p>Estoque atual: <strong>${produto.qtd} unidades</strong></p>
         <div class="field-group">
           <label>Quantidade a adicionar</label>
           <input type="number" id="repor-qtd-${id}" value="1" min="1" />
         </div>
       </div>
       <div class="modal-footer">
-        <button class="btn-secondary" onclick="this.closest('.modal-overlay').remove()">Cancelar</button>
+        <button class="btn-secondary" onclick="document.getElementById('modal-repor-${id}').remove()">Cancelar</button>
         <button class="btn-primary" onclick="confirmReporEstoque('${id}')">Adicionar</button>
       </div>
     </div>
@@ -370,7 +356,8 @@ window.confirmReporEstoque = async function(id) {
     const produto = state.products.find(p => p.id === id);
     const novaQtd = (produto.qtd || 0) + add;
     await updateProduct(state.currentBiz.id, state.user.uid, id, { qtd: novaQtd });
-    document.querySelector('.modal-overlay').remove();
+    // Fecha pelo id único em vez de querySelector genérico
+    document.getElementById(`modal-repor-${id}`).remove();
     await loadProductsAndSales();
     showToast('✅ Estoque atualizado');
   } catch (e) {
@@ -380,23 +367,17 @@ window.confirmReporEstoque = async function(id) {
 };
 
 window.editarProduto = function (id) {
-  console.log('editarProduto chamado com id:', id);
   const produto = state.products.find(p => p.id === id);
-  if (!produto) {
-    console.log('Produto não encontrado:', id);
-    return;
-  }
+  if (!produto) return;
 
-  console.log('Produto encontrado:', produto);
-
-  // Modal de edição
   const modal = document.createElement('div');
   modal.className = 'modal-overlay open';
+  modal.id = `modal-editar-${id}`;
   modal.innerHTML = `
     <div class="modal-content">
       <div class="modal-header">
         <h3>Editar Produto</h3>
-        <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">×</button>
+        <button class="modal-close" onclick="document.getElementById('modal-editar-${id}').remove()">×</button>
       </div>
       <div class="modal-body">
         <div class="field-group">
@@ -417,11 +398,18 @@ window.editarProduto = function (id) {
         </div>
         <div class="field-group">
           <label for="edit-tipo">Categoria</label>
-          <input type="text" id="edit-tipo" value="${produto.tipo || ''}" />
+          <select id="edit-tipo">
+            <option value="">Selecione o tipo</option>
+            <option ${produto.tipo === 'Cosmético' ? 'selected' : ''}>Cosmético</option>
+            <option ${produto.tipo === 'Alimento' ? 'selected' : ''}>Alimento</option>
+            <option ${produto.tipo === 'Eletrônico' ? 'selected' : ''}>Eletrônico</option>
+            <option ${produto.tipo === 'Vestuário' ? 'selected' : ''}>Vestuário</option>
+            <option ${produto.tipo === 'Outro' ? 'selected' : ''}>Outro</option>
+          </select>
         </div>
       </div>
       <div class="modal-footer">
-        <button class="btn-secondary" onclick="this.closest('.modal-overlay').remove()">Cancelar</button>
+        <button class="btn-secondary" onclick="document.getElementById('modal-editar-${id}').remove()">Cancelar</button>
         <button class="btn-primary" onclick="salvarEdicaoProduto('${id}')">Salvar</button>
       </div>
     </div>
@@ -450,8 +438,8 @@ window.salvarEdicaoProduto = async function(id) {
       tipo: novoTipo || ''
     });
 
-    // Fechar modal
-    document.querySelector('.modal-overlay').remove();
+    // Fecha pelo id único
+    document.getElementById(`modal-editar-${id}`).remove();
 
   } catch (error) {
     console.error('Erro ao salvar edição:', error);
@@ -495,13 +483,8 @@ window.updateStats = function () {
   const currentMonth = now.getMonth();
   const currentYear = now.getFullYear();
 
-  const productsThisMonth = state.products.filter(p => {
-    const d = (p.createdAt && typeof p.createdAt.toDate === 'function') ? p.createdAt.toDate() : (p.createdAt ? new Date(p.createdAt) : null);
-    if (!d) return false;
-    return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
-  }).length;
-
-  document.getElementById('stat-produtos').textContent = productsThisMonth;
+  // Total de produtos no estoque (não filtrado por mês)
+  document.getElementById('stat-produtos').textContent = state.products.length;
 
   const salesThisMonth = state.sales.filter(s => {
     const d = (s.createdAt && typeof s.createdAt.toDate === 'function') ? s.createdAt.toDate() : (s.createdAt ? new Date(s.createdAt) : (s.data ? new Date(s.data) : null));
@@ -528,6 +511,13 @@ window.updateStats = function () {
   }, 0);
 
   document.getElementById('stat-lucro').textContent = 'R$ ' + lucroTotal.toFixed(2).replace('.', ',');
+
+  // Dízimo mensal (10% do lucro líquido do mês)
+  const dizimo = lucroTotal * 0.1;
+  const dizimoEl = document.getElementById('stat-dizimo');
+  if (dizimoEl) {
+    dizimoEl.textContent = 'R$ ' + dizimo.toFixed(2).replace('.', ',');
+  }
 };
 
 // ===== TOAST =====
@@ -551,7 +541,7 @@ document.getElementById("google-login").onclick = async () => {
   try {
     await loginGoogle();
   } catch (e) {
-    showToast("Erro no Google");
+    showToast("Erro no login com Google");
   }
 };
 
@@ -563,19 +553,26 @@ window.adicionarProduto = async function () {
   const tipo = document.getElementById('add-tipo').value.trim();
   const marca = document.getElementById('add-marca').value.trim();
   const imageFile = document.getElementById('product-image').files[0];
+
   if (!nome || isNaN(custo) || isNaN(qtd) || !tipo) {
     showToast('❌ Preencha todos os campos obrigatórios');
     return;
   }
 
   try {
+    // ✅ Faz upload real da imagem antes de salvar o produto
+    // uploadProductImage(file) — recebe só o arquivo, sem businessId/userId
+    if (imageFile) {
+      showToast('⏳ Enviando imagem...');
+      uploadedImageUrl = await uploadProductImage(imageFile);
+    }
+
     const product = {
       nome,
       custo,
       qtd,
       tipo,
       marca: marca || 'N/A',
-
       imageUrl: uploadedImageUrl
     };
 
@@ -586,7 +583,6 @@ window.adicionarProduto = async function () {
     );
 
     uploadedImageUrl = "";
-
     resetPhotoUpload();
 
     // Limpar formulário
@@ -612,37 +608,72 @@ window.addToCart = function () {
   const selectEl = document.getElementById('sell-product-select');
   const productId = selectEl.value;
 
-  if (!productId) {
-    showToast('Selecione um produto');
-    return;
-  }
+  if (!productId) return;
 
   const product = state.products.find(p => p.id === productId);
   if (!product) return showToast('Produto não encontrado');
-
   if (product.qtd <= 0) return showToast('❌ Produto fora de estoque');
 
-  // Pergunta quantidade e preço de venda (preço informado na venda)
-  const qtyStr = prompt('Quantidade:', '1');
-  const qty = parseInt(qtyStr || '0', 10);
-  if (!qty || qty <= 0) return showToast('Quantidade inválida');
+  // Modal para quantidade e preço de venda (substitui os prompt() nativos)
+  const modalId = `modal-add-cart-${productId}`;
+  // Evita abrir duplicado
+  if (document.getElementById(modalId)) return;
+
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay open';
+  modal.id = modalId;
+  modal.innerHTML = `
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Adicionar ao carrinho</h3>
+        <button class="modal-close" onclick="document.getElementById('${modalId}').remove(); document.getElementById('sell-product-select').value = '';">×</button>
+      </div>
+      <div class="modal-body">
+        <p style="margin-bottom:12px">Produto: <strong>${product.nome}</strong></p>
+        <p style="margin-bottom:16px; font-size:0.85rem; color:var(--gray)">Estoque disponível: ${product.qtd} unidades</p>
+        <div class="field-group">
+          <label>Quantidade</label>
+          <input type="number" id="cart-qty-${productId}" value="1" min="1" max="${product.qtd}" />
+        </div>
+        <div class="field-group">
+          <label>Preço de venda por unidade (R$)</label>
+          <input type="number" id="cart-price-${productId}" value="" min="0.01" step="0.01" placeholder="0,00" />
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-secondary" onclick="document.getElementById('${modalId}').remove(); document.getElementById('sell-product-select').value = '';">Cancelar</button>
+        <button class="btn-primary" onclick="confirmAddToCart('${productId}', '${modalId}')">Adicionar</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+
+  // Foca no campo de preço automaticamente
+  setTimeout(() => document.getElementById(`cart-price-${productId}`)?.focus(), 100);
+};
+
+window.confirmAddToCart = function(productId, modalId) {
+  const product = state.products.find(p => p.id === productId);
+  if (!product) return showToast('Produto não encontrado');
+
+  const qty = parseInt(document.getElementById(`cart-qty-${productId}`).value || '0', 10);
+  const price = parseFloat(document.getElementById(`cart-price-${productId}`).value.replace(',', '.') || '0');
+
+  if (!qty || qty <= 0) return showToast('❌ Quantidade inválida');
   if (qty > product.qtd) return showToast('❌ Estoque insuficiente');
+  if (isNaN(price) || price <= 0) return showToast('❌ Preço inválido');
 
-  const priceStr = prompt('Preço de venda por unidade (ex: 12.50):', '0');
-  const price = parseFloat(priceStr.replace(',', '.') || '0');
-  if (isNaN(price) || price <= 0) return showToast('Preço inválido');
-
-  // Verifica se já está no carrinho
   const cartItem = state.cart.find(c => c.id === productId);
   if (cartItem) {
     if (cartItem.quantidade + qty > product.qtd) return showToast('❌ Estoque insuficiente');
     cartItem.quantidade += qty;
-    cartItem.preco = price; // update price to latest entered
+    cartItem.preco = price;
   } else {
     state.cart.push({ id: product.id, nome: product.nome, preco: price, quantidade: qty });
   }
 
-  selectEl.value = '';
+  document.getElementById(modalId).remove();
+  document.getElementById('sell-product-select').value = '';
   renderCart();
   showToast('✅ Produto adicionado ao carrinho');
 };
@@ -888,7 +919,9 @@ window.renderHistorico = function () {
           ${sale.metodoPagamento === 'fiado' && sale.fiadoStatus === 'nao-pago' ? '<span class="fiado-badge">Fiado</span>' : ''}
           ${sale.pago && sale.metodoPagamento !== 'fiado' ? '<span class="pago-badge">Pago</span>' : ''}
           ${sale.pago && sale.metodoPagamento === 'fiado' ? '<span class="pago-badge">Pago</span>' : ''}
-          <span class="historico-total">R$ ${sale.total.toFixed(2).replace('.', ',')}</span>
+          <span class="historico-total">
+            R$ ${Number(sale.total || 0).toFixed(2).replace('.', ',')}
+          </span>
         </div>
       </div>
       <div class="historico-meta">
@@ -990,22 +1023,17 @@ window.showClientPhone = function(phone) {
 };
 
 window.editarVendaFiada = function(saleId) {
-  console.log('editarVendaFiada chamado com saleId:', saleId);
   const sale = state.sales.find(s => s.id === saleId);
-  if (!sale) {
-    console.log('Venda não encontrada:', saleId);
-    return;
-  }
-
-  console.log('Venda encontrada:', sale);
+  if (!sale) return;
 
   const modal = document.createElement('div');
   modal.className = 'modal-overlay open';
+  modal.id = 'modal-marcar-pago';
   modal.innerHTML = `
     <div class="modal-content modal-edit-venda">
       <div class="modal-header">
         <h3>Marcar venda como paga</h3>
-        <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">×</button>
+        <button class="modal-close" onclick="document.getElementById('modal-marcar-pago').remove()">×</button>
       </div>
       <div class="modal-body">
         <div class="edit-venda-form">
@@ -1026,7 +1054,7 @@ window.editarVendaFiada = function(saleId) {
         </div>
       </div>
       <div class="modal-footer">
-        <button class="btn-secondary" onclick="this.closest('.modal-overlay').remove()">Cancelar</button>
+        <button class="btn-secondary" onclick="document.getElementById('modal-marcar-pago').remove()">Cancelar</button>
         <button class="btn-primary" onclick="marcarVendaComoPaga('${saleId}')">Marcar como Paga</button>
       </div>
     </div>
@@ -1038,8 +1066,8 @@ window.marcarVendaComoPaga = async function(saleId) {
   const paymentMethod = document.getElementById('edit-payment-method').value;
 
   try {
-    // Atualizar a venda no Firestore
-    const saleRef = doc(db, 'businesses', state.currentBiz.id, 'sales', saleId);
+    // ✅ Path correto seguindo o padrão do app (users/{uid}/businesses/{bizId}/sales/{saleId})
+    const saleRef = doc(db, 'users', state.user.uid, 'businesses', state.currentBiz.id, 'sales', saleId);
     await updateDoc(saleRef, {
       pago: true,
       fiadoStatus: 'pago',
@@ -1051,6 +1079,7 @@ window.marcarVendaComoPaga = async function(saleId) {
     const sale = state.sales.find(s => s.id === saleId);
     for (const item of sale.itens) {
       const product = state.products.find(p => p.id === item.produtoId);
+      if (!product) continue;
       const novaQtd = product.qtd - item.quantidade;
 
       await updateProduct(
@@ -1061,8 +1090,8 @@ window.marcarVendaComoPaga = async function(saleId) {
       );
     }
 
-    // Fechar modal e recarregar dados
-    document.querySelector('.modal-overlay').remove();
+    // Fechar modal pelo ID único em vez de querySelector genérico
+    document.getElementById('modal-marcar-pago').remove();
     await loadProductsAndSales();
     showToast('✅ Venda marcada como paga!');
 
@@ -1074,7 +1103,8 @@ window.marcarVendaComoPaga = async function(saleId) {
 
 window.setHistFilter = function (filter, btn) {
   state.histFilter = filter;
-  document.querySelectorAll('.filter-tab').forEach(b => b.classList.remove('active'));
+  // Só reseta as abas do grupo de período, não as de tipo de venda
+  document.querySelectorAll('.filter-tabs .filter-tab').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   renderHistorico();
 };
