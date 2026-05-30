@@ -321,30 +321,32 @@ window.reporEstoque = function(id) {
   const produto = state.products.find(p => p.id === id);
   if (!produto) return showToast('Produto não encontrado');
 
-  const modal = document.createElement('div');
-  modal.className = 'modal-overlay open';
-  modal.id = `modal-repor-${id}`;
-  modal.innerHTML = `
-    <div class="modal-content">
-      <div class="modal-header">
-        <h3>Reposição de estoque</h3>
-        <button class="modal-close" onclick="document.getElementById('modal-repor-${id}').remove()">×</button>
+  openBottomSheet(`modal-repor-${id}`, `
+    <div class="bs-handle"></div>
+    <div class="bs-header">
+      <div class="bs-title-wrap">
+        <div class="bs-icon bs-icon--green"><i class="bi bi-plus-circle-fill"></i></div>
+        <h3 class="bs-title">Repor Estoque</h3>
       </div>
-      <div class="modal-body">
-        <p>Produto: <strong>${produto.nome}</strong></p>
-        <p>Estoque atual: <strong>${produto.qtd} unidades</strong></p>
-        <div class="field-group">
-          <label>Quantidade a adicionar</label>
-          <input type="number" id="repor-qtd-${id}" value="1" min="1" />
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button class="btn-secondary" onclick="document.getElementById('modal-repor-${id}').remove()">Cancelar</button>
-        <button class="btn-primary" onclick="confirmReporEstoque('${id}')">Adicionar</button>
+      <button class="bs-close" onclick="closeBottomSheet('modal-repor-${id}')"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div class="bs-product-info">
+      <span class="bs-product-name">${produto.nome}</span>
+      <span class="bs-stock-badge">Estoque atual: <strong>${produto.qtd}</strong></span>
+    </div>
+    <div class="bs-body">
+      <label class="bs-label">Quantidade a adicionar</label>
+      <div class="bs-qty-row">
+        <button class="bs-qty-btn" onclick="bsAdjustQty('repor-qtd-${id}',-1)"><i class="bi bi-dash"></i></button>
+        <input type="number" id="repor-qtd-${id}" class="bs-qty-input" value="1" min="1" />
+        <button class="bs-qty-btn" onclick="bsAdjustQty('repor-qtd-${id}',1)"><i class="bi bi-plus"></i></button>
       </div>
     </div>
-  `;
-  document.body.appendChild(modal);
+    <div class="bs-footer">
+      <button class="bs-btn-cancel" onclick="closeBottomSheet('modal-repor-${id}')">Cancelar</button>
+      <button class="bs-btn-confirm" onclick="confirmReporEstoque('${id}')"><i class="bi bi-check-lg"></i> Adicionar</button>
+    </div>
+  `);
 };
 
 window.confirmReporEstoque = async function(id) {
@@ -357,7 +359,7 @@ window.confirmReporEstoque = async function(id) {
     const novaQtd = (produto.qtd || 0) + add;
     await updateProduct(state.currentBiz.id, state.user.uid, id, { qtd: novaQtd });
     // Fecha pelo id único em vez de querySelector genérico
-    document.getElementById(`modal-repor-${id}`).remove();
+    closeBottomSheet(`modal-repor-${id}`);
     await loadProductsAndSales();
     showToast('✅ Estoque atualizado');
   } catch (e) {
@@ -370,51 +372,51 @@ window.editarProduto = function (id) {
   const produto = state.products.find(p => p.id === id);
   if (!produto) return;
 
-  const modal = document.createElement('div');
-  modal.className = 'modal-overlay open';
-  modal.id = `modal-editar-${id}`;
-  modal.innerHTML = `
-    <div class="modal-content">
-      <div class="modal-header">
-        <h3>Editar Produto</h3>
-        <button class="modal-close" onclick="document.getElementById('modal-editar-${id}').remove()">×</button>
+  openBottomSheet(`modal-editar-${id}`, `
+    <div class="bs-handle"></div>
+    <div class="bs-header">
+      <div class="bs-title-wrap">
+        <div class="bs-icon bs-icon--gold"><i class="bi bi-pencil-fill"></i></div>
+        <h3 class="bs-title">Editar Produto</h3>
       </div>
-      <div class="modal-body">
-        <div class="field-group">
-          <label for="edit-nome">Nome do produto</label>
-          <input type="text" id="edit-nome" value="${produto.nome}" />
+      <button class="bs-close" onclick="closeBottomSheet('modal-editar-${id}')"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div class="bs-body bs-scrollable">
+      <label class="bs-label">Nome do produto <span class="bs-req">*</span></label>
+      <input type="text" id="edit-nome" class="bs-input" value="${produto.nome}" />
+
+      <div class="bs-row-2">
+        <div>
+          <label class="bs-label">Estoque <span class="bs-req">*</span></label>
+          <input type="number" id="edit-qtd" class="bs-input" value="${produto.qtd}" min="0" />
         </div>
-        <div class="field-group">
-          <label for="edit-qtd">Quantidade em estoque</label>
-          <input type="number" id="edit-qtd" value="${produto.qtd}" min="0" />
-        </div>
-        <div class="field-group">
-          <label for="edit-custo">Preço de custo (R$)</label>
-          <input type="number" id="edit-custo" value="${produto.custo}" min="0" step="0.01" />
-        </div>
-        <div class="field-group">
-          <label for="edit-marca">Marca</label>
-          <input type="text" id="edit-marca" value="${produto.marca || ''}" />
-        </div>
-        <div class="field-group">
-          <label for="edit-tipo">Categoria</label>
-          <select id="edit-tipo">
-            <option value="">Selecione o tipo</option>
-            <option ${produto.tipo === 'Cosmético' ? 'selected' : ''}>Cosmético</option>
-            <option ${produto.tipo === 'Alimento' ? 'selected' : ''}>Alimento</option>
-            <option ${produto.tipo === 'Eletrônico' ? 'selected' : ''}>Eletrônico</option>
-            <option ${produto.tipo === 'Vestuário' ? 'selected' : ''}>Vestuário</option>
-            <option ${produto.tipo === 'Outro' ? 'selected' : ''}>Outro</option>
-          </select>
+        <div>
+          <label class="bs-label">Custo (R$) <span class="bs-req">*</span></label>
+          <input type="number" id="edit-custo" class="bs-input" value="${produto.custo}" min="0" step="0.01" />
         </div>
       </div>
-      <div class="modal-footer">
-        <button class="btn-secondary" onclick="document.getElementById('modal-editar-${id}').remove()">Cancelar</button>
-        <button class="btn-primary" onclick="salvarEdicaoProduto('${id}')">Salvar</button>
+
+      <label class="bs-label">Marca</label>
+      <input type="text" id="edit-marca" class="bs-input" value="${produto.marca || ''}" />
+
+      <label class="bs-label">Categoria</label>
+      <div class="bs-select-wrap">
+        <select id="edit-tipo" class="bs-input">
+          <option value="">Selecione o tipo</option>
+          <option ${produto.tipo === 'Cosmético' ? 'selected' : ''}>Cosmético</option>
+          <option ${produto.tipo === 'Alimento' ? 'selected' : ''}>Alimento</option>
+          <option ${produto.tipo === 'Eletrônico' ? 'selected' : ''}>Eletrônico</option>
+          <option ${produto.tipo === 'Vestuário' ? 'selected' : ''}>Vestuário</option>
+          <option ${produto.tipo === 'Outro' ? 'selected' : ''}>Outro</option>
+        </select>
+        <i class="bi bi-chevron-down"></i>
       </div>
     </div>
-  `;
-  document.body.appendChild(modal);
+    <div class="bs-footer">
+      <button class="bs-btn-cancel" onclick="closeBottomSheet('modal-editar-${id}')">Cancelar</button>
+      <button class="bs-btn-confirm" onclick="salvarEdicaoProduto('${id}')"><i class="bi bi-check-lg"></i> Salvar</button>
+    </div>
+  `);
 };
 
 window.salvarEdicaoProduto = async function(id) {
@@ -438,8 +440,7 @@ window.salvarEdicaoProduto = async function(id) {
       tipo: novoTipo || ''
     });
 
-    // Fecha pelo id único
-    document.getElementById(`modal-editar-${id}`).remove();
+    closeBottomSheet(`modal-editar-${id}`);
 
   } catch (error) {
     console.error('Erro ao salvar edição:', error);
@@ -619,34 +620,34 @@ window.addToCart = function () {
   // Evita abrir duplicado
   if (document.getElementById(modalId)) return;
 
-  const modal = document.createElement('div');
-  modal.className = 'modal-overlay open';
-  modal.id = modalId;
-  modal.innerHTML = `
-    <div class="modal-content">
-      <div class="modal-header">
-        <h3>Adicionar ao carrinho</h3>
-        <button class="modal-close" onclick="document.getElementById('${modalId}').remove(); document.getElementById('sell-product-select').value = '';">×</button>
+  openBottomSheet(modalId, `
+    <div class="bs-handle"></div>
+    <div class="bs-header">
+      <div class="bs-title-wrap">
+        <div class="bs-icon bs-icon--gold"><i class="bi bi-cart-plus-fill"></i></div>
+        <h3 class="bs-title">Adicionar ao Carrinho</h3>
       </div>
-      <div class="modal-body">
-        <p style="margin-bottom:12px">Produto: <strong>${product.nome}</strong></p>
-        <p style="margin-bottom:16px; font-size:0.85rem; color:var(--gray)">Estoque disponível: ${product.qtd} unidades</p>
-        <div class="field-group">
-          <label>Quantidade</label>
-          <input type="number" id="cart-qty-${productId}" value="1" min="1" max="${product.qtd}" />
-        </div>
-        <div class="field-group">
-          <label>Preço de venda por unidade (R$)</label>
-          <input type="number" id="cart-price-${productId}" value="" min="0.01" step="0.01" placeholder="0,00" />
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button class="btn-secondary" onclick="document.getElementById('${modalId}').remove(); document.getElementById('sell-product-select').value = '';">Cancelar</button>
-        <button class="btn-primary" onclick="confirmAddToCart('${productId}', '${modalId}')">Adicionar</button>
-      </div>
+      <button class="bs-close" onclick="closeBottomSheet('${modalId}'); document.getElementById('sell-product-select').value = '';"><i class="bi bi-x-lg"></i></button>
     </div>
-  `;
-  document.body.appendChild(modal);
+    <div class="bs-product-info">
+      <span class="bs-product-name">${product.nome}</span>
+      <span class="bs-stock-badge">Disponível: <strong>${product.qtd} un.</strong></span>
+    </div>
+    <div class="bs-body">
+      <label class="bs-label">Quantidade</label>
+      <div class="bs-qty-row">
+        <button class="bs-qty-btn" onclick="bsAdjustQty('cart-qty-${productId}',-1)"><i class="bi bi-dash"></i></button>
+        <input type="number" id="cart-qty-${productId}" class="bs-qty-input" value="1" min="1" max="${product.qtd}" />
+        <button class="bs-qty-btn" onclick="bsAdjustQty('cart-qty-${productId}',1)"><i class="bi bi-plus"></i></button>
+      </div>
+      <label class="bs-label" style="margin-top:16px">Preço de venda por unidade (R$) <span class="bs-req">*</span></label>
+      <input type="number" id="cart-price-${productId}" class="bs-input" min="0.01" step="0.01" placeholder="0,00" />
+    </div>
+    <div class="bs-footer">
+      <button class="bs-btn-cancel" onclick="closeBottomSheet('${modalId}'); document.getElementById('sell-product-select').value = '';">Cancelar</button>
+      <button class="bs-btn-confirm" onclick="confirmAddToCart('${productId}', '${modalId}')"><i class="bi bi-cart-check-fill"></i> Adicionar</button>
+    </div>
+  `);
 
   // Foca no campo de preço automaticamente
   setTimeout(() => document.getElementById(`cart-price-${productId}`)?.focus(), 100);
@@ -672,7 +673,7 @@ window.confirmAddToCart = function(productId, modalId) {
     state.cart.push({ id: product.id, nome: product.nome, preco: price, quantidade: qty });
   }
 
-  document.getElementById(modalId).remove();
+  closeBottomSheet(modalId);
   document.getElementById('sell-product-select').value = '';
   renderCart();
   showToast('✅ Produto adicionado ao carrinho');
@@ -949,43 +950,52 @@ window.viewSaleDetails = function(saleId) {
   const sale = state.sales.find(s => s.id === saleId);
   if (!sale) return showToast('Venda não encontrada');
 
-  const modal = document.createElement('div');
-  modal.className = 'modal-overlay open';
-  modal.innerHTML = `
-    <div class="modal-content">
-      <div class="modal-header">
-        <h3>Detalhes da Venda</h3>
-        <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">×</button>
+  const itensList = (sale.itens || []).map(it => `
+    <div class="bs-sale-item">
+      <div class="bs-sale-item-info">
+        <strong>${it.nome}</strong>
+        <span>${it.quantidade}x — R$ ${parseFloat(it.preco).toFixed(2).replace('.',',')}/un.</span>
       </div>
-      <div class="modal-body">
-        <p><strong>Data:</strong> ${sale.data}</p>
-        <p><strong>Total:</strong> R$ ${ (sale.total||0).toFixed(2).replace('.',',') }</p>
-        <p><strong>Lucro:</strong> R$ ${ (sale.lucro||0).toFixed(2).replace('.',',') }</p>
-        <p><strong>Cliente:</strong> ${sale.cliente}</p>
-        <p><strong>Telefone:</strong> ${sale.telefone || 'N/A'}</p>
-        <p><strong>Método:</strong> ${sale.metodoPagamento}</p>
-        <hr />
-        <div>
-          ${(sale.itens || []).map(it => `
-            <div style="display:flex;justify-content:space-between;margin-bottom:6px">
-              <div>
-                <strong>${it.nome}</strong>
-                <div style="font-size:0.9rem;color:var(--gray)">Qtd: ${it.quantidade} x R$ ${parseFloat(it.preco).toFixed(2).replace('.',',')}</div>
-              </div>
-              <div style="text-align:right">
-                <div>Subtotal: R$ ${(it.subtotal||0).toFixed(2).replace('.',',')}</div>
-                <div>Lucro: R$ ${(it.lucro||0).toFixed(2).replace('.',',')}</div>
-              </div>
-            </div>
-          `).join('')}
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button class="btn-secondary" onclick="this.closest('.modal-overlay').remove()">Fechar</button>
+      <div class="bs-sale-item-values">
+        <span>R$ ${(it.subtotal||0).toFixed(2).replace('.',',')}</span>
+        <span class="bs-sale-lucro">+R$ ${(it.lucro||0).toFixed(2).replace('.',',')}</span>
       </div>
     </div>
-  `;
-  document.body.appendChild(modal);
+  `).join('');
+
+  openBottomSheet('modal-detalhes-venda', `
+    <div class="bs-handle"></div>
+    <div class="bs-header">
+      <div class="bs-title-wrap">
+        <div class="bs-icon bs-icon--brown"><i class="bi bi-receipt"></i></div>
+        <h3 class="bs-title">Detalhes da Venda</h3>
+      </div>
+      <button class="bs-close" onclick="closeBottomSheet('modal-detalhes-venda')"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div class="bs-body bs-scrollable">
+      <div class="bs-detail-grid">
+        <div class="bs-detail-item"><span>Cliente</span><strong>${sale.cliente}</strong></div>
+        <div class="bs-detail-item"><span>Data</span><strong>${sale.data}</strong></div>
+        <div class="bs-detail-item"><span>Método</span><strong>${getPaymentMethodLabel(sale)}</strong></div>
+        <div class="bs-detail-item"><span>Telefone</span><strong>${sale.telefone || 'N/A'}</strong></div>
+      </div>
+      <div class="bs-totals-row">
+        <div class="bs-total-box bs-total-box--gold">
+          <span>Total</span>
+          <strong>R$ ${(sale.total||0).toFixed(2).replace('.',',')}</strong>
+        </div>
+        <div class="bs-total-box bs-total-box--green">
+          <span>Lucro</span>
+          <strong>R$ ${(sale.lucro||0).toFixed(2).replace('.',',')}</strong>
+        </div>
+      </div>
+      <div class="bs-section-title"><i class="bi bi-box-seam"></i> Itens</div>
+      <div class="bs-sale-items">${itensList}</div>
+    </div>
+    <div class="bs-footer">
+      <button class="bs-btn-confirm" onclick="closeBottomSheet('modal-detalhes-venda')">Fechar</button>
+    </div>
+  `);
 };
 
 function getPaymentMethodLabel(sale) {
@@ -999,67 +1009,60 @@ function getPaymentMethodLabel(sale) {
 }
 
 window.showClientPhone = function(phone) {
-  console.log('showClientPhone chamado com phone:', phone);
-  // Modal simples para mostrar telefone
-  const modal = document.createElement('div');
-  modal.className = 'modal-overlay open';
-  modal.innerHTML = `
-    <div class="modal-content">
-      <div class="modal-header">
-        <h3>Telefone do Cliente</h3>
-        <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">×</button>
+  openBottomSheet('modal-phone', `
+    <div class="bs-handle"></div>
+    <div class="bs-header">
+      <div class="bs-title-wrap">
+        <div class="bs-icon bs-icon--green"><i class="bi bi-telephone-fill"></i></div>
+        <h3 class="bs-title">Telefone do Cliente</h3>
       </div>
-      <div class="modal-body">
-        <div class="phone-display">
-          <strong>📞 ${phone}</strong>
-        </div>
-        <p style="margin-top: 16px; color: var(--brown-light); font-size: 0.9rem;">
-          Este telefone foi fornecido pelo cliente no momento da venda.
-        </p>
-      </div>
+      <button class="bs-close" onclick="closeBottomSheet('modal-phone')"><i class="bi bi-x-lg"></i></button>
     </div>
-  `;
-  document.body.appendChild(modal);
+    <div class="bs-body" style="text-align:center; padding: 24px 20px;">
+      <a href="tel:${phone}" class="bs-phone-display">
+        <i class="bi bi-telephone-fill"></i> ${phone}
+      </a>
+      <p style="margin-top:14px; color:var(--gray); font-size:13px;">Toque para ligar direto</p>
+    </div>
+    <div class="bs-footer">
+      <button class="bs-btn-confirm" onclick="closeBottomSheet('modal-phone')">Fechar</button>
+    </div>
+  `);
 };
 
 window.editarVendaFiada = function(saleId) {
   const sale = state.sales.find(s => s.id === saleId);
   if (!sale) return;
 
-  const modal = document.createElement('div');
-  modal.className = 'modal-overlay open';
-  modal.id = 'modal-marcar-pago';
-  modal.innerHTML = `
-    <div class="modal-content modal-edit-venda">
-      <div class="modal-header">
-        <h3>Marcar venda como paga</h3>
-        <button class="modal-close" onclick="document.getElementById('modal-marcar-pago').remove()">×</button>
+  openBottomSheet('modal-marcar-pago', `
+    <div class="bs-handle"></div>
+    <div class="bs-header">
+      <div class="bs-title-wrap">
+        <div class="bs-icon bs-icon--green"><i class="bi bi-check-circle-fill"></i></div>
+        <h3 class="bs-title">Marcar como Pago</h3>
       </div>
-      <div class="modal-body">
-        <div class="edit-venda-form">
-          <div class="field-group">
-            <label>Cliente: <strong>${sale.cliente}</strong></label>
-          </div>
-          <div class="field-group">
-            <label>Total: <strong>R$ ${sale.total.toFixed(2).replace('.', ',')}</strong></label>
-          </div>
-          <div class="field-group">
-            <label for="edit-payment-method">Como foi pago?</label>
-            <select id="edit-payment-method">
-              <option value="especie">💵 Espécie</option>
-              <option value="cartao">💳 Cartão</option>
-              <option value="pix">📱 PIX</option>
-            </select>
-          </div>
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button class="btn-secondary" onclick="document.getElementById('modal-marcar-pago').remove()">Cancelar</button>
-        <button class="btn-primary" onclick="marcarVendaComoPaga('${saleId}')">Marcar como Paga</button>
+      <button class="bs-close" onclick="closeBottomSheet('modal-marcar-pago')"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div class="bs-product-info">
+      <span class="bs-product-name">${sale.cliente}</span>
+      <span class="bs-stock-badge">Total: <strong>R$ ${sale.total.toFixed(2).replace('.', ',')}</strong></span>
+    </div>
+    <div class="bs-body">
+      <label class="bs-label">Como foi pago?</label>
+      <div class="bs-select-wrap">
+        <select id="edit-payment-method" class="bs-input">
+          <option value="especie">💵 Espécie</option>
+          <option value="cartao">💳 Cartão</option>
+          <option value="pix">📱 PIX</option>
+        </select>
+        <i class="bi bi-chevron-down"></i>
       </div>
     </div>
-  `;
-  document.body.appendChild(modal);
+    <div class="bs-footer">
+      <button class="bs-btn-cancel" onclick="closeBottomSheet('modal-marcar-pago')">Cancelar</button>
+      <button class="bs-btn-confirm bs-btn-confirm--green" onclick="marcarVendaComoPaga('${saleId}')"><i class="bi bi-check-lg"></i> Confirmar Pagamento</button>
+    </div>
+  `);
 };
 
 window.marcarVendaComoPaga = async function(saleId) {
@@ -1090,8 +1093,7 @@ window.marcarVendaComoPaga = async function(saleId) {
       );
     }
 
-    // Fechar modal pelo ID único em vez de querySelector genérico
-    document.getElementById('modal-marcar-pago').remove();
+    closeBottomSheet('modal-marcar-pago');
     await loadProductsAndSales();
     showToast('✅ Venda marcada como paga!');
 
@@ -1176,6 +1178,47 @@ function setupPaymentMethodListeners() {
     });
   });
 }
+
+// ===== BOTTOM SHEET SYSTEM =====
+window.openBottomSheet = function(id, html) {
+  // Remove qualquer sheet existente com mesmo id
+  const existing = document.getElementById(id);
+  if (existing) existing.remove();
+
+  const sheet = document.createElement('div');
+  sheet.className = 'bs-overlay';
+  sheet.id = id;
+  sheet.innerHTML = `<div class="bs-sheet">${html}</div>`;
+
+  // Fecha ao clicar no backdrop
+  sheet.addEventListener('click', (e) => {
+    if (e.target === sheet) closeBottomSheet(id);
+  });
+
+  document.body.appendChild(sheet);
+
+  // Força reflow para animação funcionar
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => sheet.classList.add('bs-open'));
+  });
+};
+
+window.closeBottomSheet = function(id) {
+  const sheet = document.getElementById(id);
+  if (!sheet) return;
+  sheet.classList.remove('bs-open');
+  sheet.addEventListener('transitionend', () => sheet.remove(), { once: true });
+};
+
+window.bsAdjustQty = function(inputId, delta) {
+  const input = document.getElementById(inputId);
+  if (!input) return;
+  const min = parseInt(input.min) || 1;
+  const max = parseInt(input.max) || 9999;
+  const current = parseInt(input.value) || 1;
+  const next = Math.min(max, Math.max(min, current + delta));
+  input.value = next;
+};
 
 // ===== SERVICE WORKER REGISTRATION =====
 async function registerServiceWorker() {
