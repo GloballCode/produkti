@@ -38,7 +38,7 @@ import {
 
 // ===== ACESSO / TRIAL / PAGAMENTO =====
 // Troque pelo seu número de WhatsApp: DDI + DDD + número, só dígitos.
-const WHATSAPP_NUMBER = "5599999999999";
+const url = `https://wa.me/${WHATSAPP_NUMBER}`;
 const TRIAL_DAYS = 7;
 
 // ===== STATE =====
@@ -161,7 +161,7 @@ function showPaywall() {
         <div style="width:64px;height:64px;background:#fdf3d8;border-radius:16px;display:flex;align-items:center;justify-content:center;margin:0 auto 18px;font-size:30px;">🔒</div>
         <h1 style="font-size:20px;font-weight:800;margin-bottom:8px;">${title}</h1>
         <p style="color:var(--gray);font-size:14px;line-height:1.55;margin-bottom:26px;">${msg}</p>
-        <a href="https://wa.me/${WHATSAPP_NUMBER}?text=${whatsappMsg}" target="_blank" rel="noopener"
+        <a href="${url}?text=${whatsappMsg}" target="_blank" rel="noopener"
           style="display:flex;align-items:center;justify-content:center;gap:8px;background:var(--gold);color:var(--brown);padding:14px;border-radius:14px;font-weight:700;text-decoration:none;margin-bottom:12px;">
           <i class="bi bi-whatsapp"></i> Falar no WhatsApp
         </a>
