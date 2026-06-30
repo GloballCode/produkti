@@ -5,8 +5,16 @@ let uploadedImageUrl = "";
 import {
   doc,
   deleteDoc,
-  updateDoc
+  updateDoc,
+  getDoc,
+  setDoc,
+  serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+import {
+  getAuth,
+  signOut
+} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
 import { db } from "./firebase.js";
 
@@ -28,6 +36,11 @@ import {
   deleteProductImage
 } from "./services/firestoreService.js";
 
+// ===== ACESSO / TRIAL / PAGAMENTO =====
+// Troque pelo seu número de WhatsApp: DDI + DDD + número, só dígitos.
+const WHATSAPP_NUMBER = "5599999999999";
+const TRIAL_DAYS = 7;
+
 // ===== STATE =====
 let state = {
   businesses: [],
@@ -37,7 +50,8 @@ let state = {
   cart: [],
   histFilter: 'todas',
   saleTypeFilter: 'todas',
-  notificationsEnabled: false
+  notificationsEnabled: false,
+  access: null
 };
 
 // ===== SCREEN ROUTING =====
@@ -57,12 +71,115 @@ window.showScreen = function (id) {
 observeAuth(async (user) => {
   if (user) {
     state.user = user;
+
+    const userData = await ensureUserAccess(user.uid);
+    state.access = getAccessStatus(userData);
+
+    if (!state.access.allowed) {
+      showPaywall();
+      return;
+    }
+
     await loadBusinesses();
     showScreen('screen-business');
   } else {
     showScreen('screen-login');
   }
 });
+
+// ===== ACESSO: cria/lê o documento do usuário e calcula status =====
+async function ensureUserAccess(uid) {
+  const ref = doc(db, "users", uid);
+  const snap = await getDoc(ref);
+
+  if (!snap.exists() || !snap.data().createdAt) {
+    await setDoc(ref, {
+      createdAt: serverTimestamp(),
+      plan: "trial"
+    }, { merge: true });
+
+    // refaz a leitura pois serverTimestamp() só resolve depois do round-trip
+    const freshSnap = await getDoc(ref);
+    return freshSnap.data();
+  }
+
+  return snap.data();
+}
+
+function getAccessStatus(userData) {
+  if (!userData) {
+    return { allowed: false, plan: "trial", daysLeft: 0 };
+  }
+
+  if (userData.plan === "paid") {
+    return { allowed: true, plan: "paid", daysLeft: null };
+  }
+
+  const createdAt = userData.createdAt?.toDate
+    ? userData.createdAt.toDate()
+    : new Date(userData.createdAt);
+
+  const daysElapsed = (Date.now() - createdAt.getTime()) / (1000 * 60 * 60 * 24);
+  const daysLeft = Math.max(0, Math.ceil(TRIAL_DAYS - daysElapsed));
+
+  return {
+    allowed: daysElapsed < TRIAL_DAYS,
+    plan: "trial",
+    daysLeft
+  };
+}
+
+// ===== TELA DE PAGAMENTO (injetada via JS, sem precisar editar o HTML) =====
+function showPaywall() {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+
+  let screen = document.getElementById('screen-paywall');
+  if (!screen) {
+    screen = document.createElement('div');
+    screen.id = 'screen-paywall';
+    screen.className = 'screen';
+    document.body.appendChild(screen);
+  }
+
+  const expired = state.access.plan === 'trial' && state.access.daysLeft <= 0;
+
+  const title = expired
+    ? 'Seu teste grátis acabou'
+    : 'Continue aproveitando o Produkti';
+
+  const msg = expired
+    ? `Os ${TRIAL_DAYS} dias gratuitos chegaram ao fim. Para continuar usando o Produkti, faça o pagamento único e libere seu acesso.`
+    : `Você ainda tem ${state.access.daysLeft} dia(s) de teste grátis. Quando quiser, já pode liberar o acesso definitivo.`;
+
+  const whatsappMsg = encodeURIComponent(
+    `Olá! Quero liberar o acesso ao Produkti.\nMeu e-mail: ${state.user.email}\nMeu ID: ${state.user.uid}`
+  );
+
+  screen.innerHTML = `
+    <div style="min-height:100vh; background:#faf2db; display:flex; align-items:center; justify-content:center; padding:24px;">
+      <div style="background:var(--white); border-radius:var(--radius); box-shadow:var(--shadow-md); padding:40px 32px; max-width:380px; width:100%; text-align:center; animation:fadeUp .4s ease;">
+        <div style="width:64px;height:64px;background:#fdf3d8;border-radius:16px;display:flex;align-items:center;justify-content:center;margin:0 auto 18px;font-size:30px;">🔒</div>
+        <h1 style="font-size:20px;font-weight:800;margin-bottom:8px;">${title}</h1>
+        <p style="color:var(--gray);font-size:14px;line-height:1.55;margin-bottom:26px;">${msg}</p>
+        <a href="https://wa.me/${WHATSAPP_NUMBER}?text=${whatsappMsg}" target="_blank" rel="noopener"
+          style="display:flex;align-items:center;justify-content:center;gap:8px;background:var(--gold);color:var(--brown);padding:14px;border-radius:14px;font-weight:700;text-decoration:none;margin-bottom:12px;">
+          <i class="bi bi-whatsapp"></i> Falar no WhatsApp
+        </a>
+        <button onclick="logoutUser()" style="background:none;border:none;color:var(--gray);font-size:13px;text-decoration:underline;cursor:pointer;font-family:inherit;">Sair da conta</button>
+      </div>
+    </div>
+  `;
+
+  screen.classList.add('active');
+}
+
+window.logoutUser = async function () {
+  try {
+    await signOut(getAuth());
+  } catch (e) {
+    console.error(e);
+  }
+};
 
 // ===== LOGIN (apenas Google) =====
 
@@ -542,7 +659,8 @@ document.getElementById("google-login").onclick = async () => {
   try {
     await loginGoogle();
   } catch (e) {
-    showToast("Erro no login com Google");
+    console.error(e);
+    alert(e.code + "\n\n" + e.message);
   }
 };
 

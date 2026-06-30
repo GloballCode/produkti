@@ -43,12 +43,23 @@ export async function registerEmail(email, password, name = "") {
   const user = userCredential.user;
 
   // salva perfil no Firestore
-  await setDoc(doc(db, "users", user.uid), {
-    name,
-    email,
-    createdAt: new Date(),
-    provider: "email"
-  });
+try {
+  await setDoc(
+    doc(db, "users", user.uid),
+    {
+      name: user.displayName || "",
+      email: user.email,
+      photoURL: user.photoURL || "",
+      provider: "google",
+      lastLogin: new Date()
+    },
+    { merge: true }
+  );
+} catch (e) {
+  console.error("SETDOC FALHOU:", e);
+}
+
+return user;
 
   return user;
 }
