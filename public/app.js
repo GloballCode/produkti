@@ -152,7 +152,7 @@ function showPaywall() {
     : `Você ainda tem ${state.access.daysLeft} dia(s) de teste grátis. Quando quiser, já pode liberar o acesso definitivo.`;
 
   const whatsappMsg = encodeURIComponent(
-    `Olá! Quero liberar o acesso ao Produkti.\nMeu e-mail: ${state.user.email}\nMeu ID: ${state.user.uid}`
+    `Olá! Quero liberar o acesso ao Produkti.\nMeu e-mail: ${state.user.email}`
   );
 
   screen.innerHTML = `
