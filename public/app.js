@@ -926,6 +926,15 @@ window.finalizarVenda = async function () {
       };
     });
 
+    // Controle de pagamento parcial: se a venda já nasce paga (não é fiado,
+    // ou é fiado marcado como "já pago"), o valor pago é o total. Se for
+    // fiado não pago, começa em zero e vai sendo abatido aos poucos.
+    const isPaidUpfront = paymentMethod !== 'fiado' || fiadoStatus === 'pago';
+    const valorPago = isPaidUpfront ? total : 0;
+    const pagamentos = isPaidUpfront
+      ? [{ valor: total, metodo: paymentMethod === 'fiado' ? fiadoPaymentMethod : paymentMethod, data: new Date().toLocaleString('pt-BR') }]
+      : [];
+
     const sale = {
       cliente: clientName,
       telefone: clientPhone || 'N/A',
@@ -937,7 +946,9 @@ window.finalizarVenda = async function () {
       metodoPagamento: paymentMethod,
       fiadoStatus: fiadoStatus,
       fiadoPaymentMethod: fiadoPaymentMethod,
-      pago: paymentMethod !== 'fiado' || fiadoStatus === 'pago'
+      valorPago: valorPago,
+      pagamentos: pagamentos,
+      pago: isPaidUpfront
     };
 
     // Salvar no Firestore
@@ -1016,7 +1027,7 @@ window.renderHistorico = function () {
     filtered = filtered.filter(s => {
       switch (state.saleTypeFilter) {
         case 'fiado':
-          return s.metodoPagamento === 'fiado' && s.fiadoStatus === 'nao-pago';
+          return s.metodoPagamento === 'fiado' && s.fiadoStatus !== 'pago';
         case 'pagas':
           return s.pago === true;
         default:
@@ -1030,14 +1041,17 @@ window.renderHistorico = function () {
     return;
   }
 
-  historicoList.innerHTML = filtered.map(sale => `
-    <div class="historico-item ${sale.metodoPagamento === 'fiado' && sale.fiadoStatus === 'nao-pago' ? 'fiado' : ''}">
+  historicoList.innerHTML = filtered.map(sale => {
+    const isFiadoAberto = sale.metodoPagamento === 'fiado' && sale.fiadoStatus !== 'pago';
+    const saldoDevedor = getSaldoDevedor(sale);
+    return `
+    <div class="historico-item ${isFiadoAberto ? 'fiado' : ''}">
       <div class="historico-header">
         <strong>${sale.cliente}</strong>
         <div style="display: flex; align-items: center; gap: 8px;">
+          ${sale.fiadoStatus === 'parcial' ? '<span class="parcial-badge">Parcial</span>' : ''}
           ${sale.metodoPagamento === 'fiado' && sale.fiadoStatus === 'nao-pago' ? '<span class="fiado-badge">Fiado</span>' : ''}
-          ${sale.pago && sale.metodoPagamento !== 'fiado' ? '<span class="pago-badge">Pago</span>' : ''}
-          ${sale.pago && sale.metodoPagamento === 'fiado' ? '<span class="pago-badge">Pago</span>' : ''}
+          ${sale.pago ? '<span class="pago-badge">Pago</span>' : ''}
           <span class="historico-total">
             R$ ${Number(sale.total || 0).toFixed(2).replace('.', ',')}
           </span>
@@ -1049,6 +1063,11 @@ window.renderHistorico = function () {
         <span>Método: ${getPaymentMethodLabel(sale)}</span>
         ${sale.primeiraCompra ? '<span class="badge-novo">Primeira compra</span>' : ''}
       </div>
+      ${isFiadoAberto ? `
+      <div class="historico-saldo">
+        <span>Pago: R$ ${Number(sale.valorPago || 0).toFixed(2).replace('.', ',')}</span>
+        <span>Faltam: <strong>R$ ${saldoDevedor.toFixed(2).replace('.', ',')}</strong></span>
+      </div>` : ''}
       <div class="historico-itens">
         ${sale.itens.map(item => `
           <span>${item.nome} (x${item.quantidade})</span>
@@ -1057,12 +1076,21 @@ window.renderHistorico = function () {
       <div class="historico-actions">
         <strong style="margin-right:8px">Lucro: R$ ${(sale.lucro||0).toFixed(2).replace('.',',')}</strong>
         ${sale.telefone && sale.telefone !== 'N/A' ? `<button class="btn-link" onclick="showClientPhone('${sale.telefone}')">📞 Ver telefone</button>` : ''}
-        ${sale.metodoPagamento === 'fiado' && sale.fiadoStatus === 'nao-pago' ? `<button class="btn-link" onclick="editarVendaFiada('${sale.id}')">✏️ Marcar como pago</button>` : ''}
+        ${isFiadoAberto ? `<button class="btn-link" onclick="abrirModalPagamento('${sale.id}')">💰 Registrar pagamento</button>` : ''}
         <button class="btn-link" onclick="viewSaleDetails('${sale.id}')">🔎 Ver detalhes</button>
       </div>
     </div>
-  `).join('');
+  `;
+  }).join('');
 };
+
+// Retorna quanto ainda falta pagar em uma venda fiado
+function getSaldoDevedor(sale) {
+  const total = Number(sale.total || 0);
+  const pago = Number(sale.valorPago || 0);
+  const saldo = total - pago;
+  return saldo > 0 ? saldo : 0;
+}
 
 window.viewSaleDetails = function(saleId) {
   const sale = state.sales.find(s => s.id === saleId);
@@ -1109,8 +1137,29 @@ window.viewSaleDetails = function(saleId) {
       </div>
       <div class="bs-section-title"><i class="bi bi-box-seam"></i> Itens</div>
       <div class="bs-sale-items">${itensList}</div>
+      ${(sale.pagamentos && sale.pagamentos.length > 0) ? `
+      <div class="bs-section-title"><i class="bi bi-cash-stack"></i> Pagamentos</div>
+      <div class="bs-sale-items">
+        ${sale.pagamentos.map(p => `
+          <div class="bs-sale-item">
+            <div class="bs-sale-item-info">
+              <strong>R$ ${Number(p.valor||0).toFixed(2).replace('.',',')}</strong>
+              <span>${p.metodo || ''} — ${p.data || ''}</span>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+      ${sale.metodoPagamento === 'fiado' && sale.fiadoStatus !== 'pago' ? `
+      <div class="bs-totals-row">
+        <div class="bs-total-box">
+          <span>Saldo devedor</span>
+          <strong>R$ ${getSaldoDevedor(sale).toFixed(2).replace('.',',')}</strong>
+        </div>
+      </div>` : ''}
+      ` : ''}
     </div>
     <div class="bs-footer">
+      ${sale.metodoPagamento === 'fiado' && sale.fiadoStatus !== 'pago' ? `<button class="bs-btn-confirm bs-btn-confirm--green" onclick="closeBottomSheet('modal-detalhes-venda'); abrirModalPagamento('${sale.id}')"><i class="bi bi-cash"></i> Registrar pagamento</button>` : ''}
       <button class="bs-btn-confirm" onclick="closeBottomSheet('modal-detalhes-venda')">Fechar</button>
     </div>
   `);
@@ -1120,6 +1169,9 @@ function getPaymentMethodLabel(sale) {
   if (sale.metodoPagamento === 'fiado') {
     if (sale.fiadoStatus === 'pago') {
       return `Fiado (${sale.fiadoPaymentMethod})`;
+    }
+    if (sale.fiadoStatus === 'parcial') {
+      return 'Fiado (Parcial)';
     }
     return 'Fiado (Não pago)';
   }
@@ -1148,24 +1200,36 @@ window.showClientPhone = function(phone) {
   `);
 };
 
-window.editarVendaFiada = function(saleId) {
+window.abrirModalPagamento = function(saleId) {
   const sale = state.sales.find(s => s.id === saleId);
   if (!sale) return;
+
+  const saldoDevedor = getSaldoDevedor(sale);
 
   openBottomSheet('modal-marcar-pago', `
     <div class="bs-handle"></div>
     <div class="bs-header">
       <div class="bs-title-wrap">
         <div class="bs-icon bs-icon--green"><i class="bi bi-check-circle-fill"></i></div>
-        <h3 class="bs-title">Marcar como Pago</h3>
+        <h3 class="bs-title">Registrar Pagamento</h3>
       </div>
       <button class="bs-close" onclick="closeBottomSheet('modal-marcar-pago')"><i class="bi bi-x-lg"></i></button>
     </div>
     <div class="bs-product-info">
       <span class="bs-product-name">${sale.cliente}</span>
-      <span class="bs-stock-badge">Total: <strong>R$ ${sale.total.toFixed(2).replace('.', ',')}</strong></span>
+      <span class="bs-stock-badge">Total: <strong>R$ ${Number(sale.total||0).toFixed(2).replace('.', ',')}</strong></span>
     </div>
     <div class="bs-body">
+      ${Number(sale.valorPago || 0) > 0 ? `
+      <div class="historico-saldo" style="margin-bottom:14px;">
+        <span>Já pago: R$ ${Number(sale.valorPago||0).toFixed(2).replace('.', ',')}</span>
+        <span>Saldo devedor: <strong>R$ ${saldoDevedor.toFixed(2).replace('.', ',')}</strong></span>
+      </div>` : ''}
+      <label class="bs-label">Valor recebido agora</label>
+      <input type="number" id="valor-pagamento" class="bs-input" step="0.01" min="0.01" max="${saldoDevedor}" value="${saldoDevedor.toFixed(2)}" placeholder="0,00" />
+      <p style="font-size:12px; color:var(--gray); margin: 6px 0 14px;">
+        Se o cliente pagar só uma parte, digite o valor pago. O restante continua como fiado.
+      </p>
       <label class="bs-label">Como foi pago?</label>
       <div class="bs-select-wrap">
         <select id="edit-payment-method" class="bs-input">
@@ -1178,45 +1242,84 @@ window.editarVendaFiada = function(saleId) {
     </div>
     <div class="bs-footer">
       <button class="bs-btn-cancel" onclick="closeBottomSheet('modal-marcar-pago')">Cancelar</button>
-      <button class="bs-btn-confirm bs-btn-confirm--green" onclick="marcarVendaComoPaga('${saleId}')"><i class="bi bi-check-lg"></i> Confirmar Pagamento</button>
+      <button class="bs-btn-confirm bs-btn-confirm--green" onclick="registrarPagamento('${saleId}')"><i class="bi bi-check-lg"></i> Confirmar Pagamento</button>
     </div>
   `);
 };
 
-window.marcarVendaComoPaga = async function(saleId) {
+window.registrarPagamento = async function(saleId) {
+  const sale = state.sales.find(s => s.id === saleId);
+  if (!sale) return;
+
   const paymentMethod = document.getElementById('edit-payment-method').value;
+  const valorInput = parseFloat(document.getElementById('valor-pagamento').value);
+  const saldoDevedor = getSaldoDevedor(sale);
+
+  if (!valorInput || valorInput <= 0) {
+    showToast('❌ Digite um valor válido');
+    return;
+  }
+
+  // Não deixa registrar mais do que o cliente ainda deve
+  const valorPagoAgora = Math.min(valorInput, saldoDevedor);
+  if (valorInput > saldoDevedor + 0.001) {
+    showToast(`ℹ️ Valor ajustado para o saldo devedor: R$ ${saldoDevedor.toFixed(2).replace('.', ',')}`);
+  }
+
+  const novoValorPago = Number(sale.valorPago || 0) + valorPagoAgora;
+  const totalmentePago = novoValorPago >= Number(sale.total || 0) - 0.001;
+  const novoStatus = totalmentePago ? 'pago' : 'parcial';
+
+  const novoPagamento = {
+    valor: valorPagoAgora,
+    metodo: paymentMethod,
+    data: new Date().toLocaleString('pt-BR')
+  };
+  const pagamentos = [...(sale.pagamentos || []), novoPagamento];
 
   try {
     // ✅ Path correto seguindo o padrão do app (users/{uid}/businesses/{bizId}/sales/{saleId})
     const saleRef = doc(db, 'users', state.user.uid, 'businesses', state.currentBiz.id, 'sales', saleId);
-    await updateDoc(saleRef, {
-      pago: true,
-      fiadoStatus: 'pago',
+
+    const updateData = {
+      valorPago: novoValorPago,
+      pagamentos: pagamentos,
+      fiadoStatus: novoStatus,
       fiadoPaymentMethod: paymentMethod,
-      dataPagamento: new Date().toLocaleString('pt-BR')
-    });
+      pago: totalmentePago
+    };
+    if (totalmentePago) {
+      updateData.dataPagamento = new Date().toLocaleString('pt-BR');
+    }
 
-    // Atualizar quantidade dos produtos (agora que foi pago)
-    const sale = state.sales.find(s => s.id === saleId);
-    for (const item of sale.itens) {
-      const product = state.products.find(p => p.id === item.produtoId);
-      if (!product) continue;
-      const novaQtd = product.qtd - item.quantidade;
+    await updateDoc(saleRef, updateData);
 
-      await updateProduct(
-        state.currentBiz.id,
-        state.user.uid,
-        item.produtoId,
-        { qtd: novaQtd }
-      );
+    // Só dá baixa no estoque quando a venda fica totalmente quitada
+    // (mesma regra que já existia: estoque de fiado só é abatido quando pago)
+    if (totalmentePago) {
+      for (const item of sale.itens) {
+        const product = state.products.find(p => p.id === item.produtoId);
+        if (!product) continue;
+        const novaQtd = product.qtd - item.quantidade;
+
+        await updateProduct(
+          state.currentBiz.id,
+          state.user.uid,
+          item.produtoId,
+          { qtd: novaQtd }
+        );
+      }
     }
 
     closeBottomSheet('modal-marcar-pago');
     await loadProductsAndSales();
-    showToast('✅ Venda marcada como paga!');
+    showToast(totalmentePago
+      ? '✅ Venda quitada com sucesso!'
+      : `✅ Pagamento parcial registrado! Faltam R$ ${(Number(sale.total||0) - novoValorPago).toFixed(2).replace('.', ',')}`
+    );
 
   } catch (error) {
-    console.error('Erro ao marcar venda como paga:', error);
+    console.error('Erro ao registrar pagamento:', error);
     showToast('❌ Erro ao atualizar venda');
   }
 };
@@ -1338,21 +1441,27 @@ window.bsAdjustQty = function(inputId, delta) {
   input.value = next;
 };
 
+let swRegistration = null;
+
 // ===== SERVICE WORKER REGISTRATION =====
 async function registerServiceWorker() {
   if ('serviceWorker' in navigator) {
     try {
-      const registration = await navigator.serviceWorker.register('/sw.js');
-      console.log('Service Worker registrado:', registration);
+      swRegistration = await navigator.serviceWorker.register('./sw.js');
+      console.log('Service Worker registrado:', swRegistration);
 
       // Verifica se já está instalado
-      if (registration.active) {
+      if (swRegistration.active) {
         console.log('Service Worker ativo');
       }
 
+      if (swRegistration.waiting) {
+        showUpdateNotification();
+      }
+
       // Escuta mudanças de estado
-      registration.addEventListener('updatefound', () => {
-        const newWorker = registration.installing;
+      swRegistration.addEventListener('updatefound', () => {
+        const newWorker = swRegistration.installing;
         if (newWorker) {
           newWorker.addEventListener('statechange', () => {
             if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
@@ -1360,6 +1469,13 @@ async function registerServiceWorker() {
             }
           });
         }
+      });
+
+      let refreshing = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (refreshing) return;
+        refreshing = true;
+        window.location.reload();
       });
 
     } catch (error) {
@@ -1517,8 +1633,8 @@ function showStockNotification(product, type) {
     navigator.serviceWorker.ready.then(registration => {
       registration.showNotification(title, {
         body: body,
-        icon: product.imageUrl || '/icon-192.png',
-        badge: '/icon-192.png',
+        icon: product.imageUrl || 'assets/logo-icon.png',
+        badge: 'assets/logo-icon.png',
         tag: `stock-${product.id}`,
         requireInteraction: true,
         data: {
@@ -1538,7 +1654,7 @@ function showStockNotification(product, type) {
     if (Notification.permission === 'granted') {
       new Notification(title, {
         body: body,
-        icon: product.imageUrl || '/icon-192.png'
+        icon: product.imageUrl || 'assets/logo-icon.png'
       });
     }
   }
@@ -1551,7 +1667,7 @@ function showUpdateNotification() {
   updateToast.innerHTML = `
     <div class="update-content">
       <span>🔄 Nova versão disponível!</span>
-      <button onclick="location.reload()">Atualizar</button>
+      <button id="update-app-button">Atualizar</button>
     </div>
   `;
   updateToast.style.cssText = `
@@ -1567,6 +1683,15 @@ function showUpdateNotification() {
     font-weight: 600;
   `;
   document.body.appendChild(updateToast);
+
+  const updateButton = document.getElementById('update-app-button');
+  if (updateButton) {
+    updateButton.addEventListener('click', () => {
+      if (swRegistration && swRegistration.waiting) {
+        swRegistration.waiting.postMessage({ type: 'SKIP_WAITING' });
+      }
+    });
+  }
 
   // Remove automaticamente após 10 segundos
   setTimeout(() => {

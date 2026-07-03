@@ -1144,8 +1144,8 @@ function showStockNotification(product, type) {
     navigator.serviceWorker.ready.then(registration => {
       registration.showNotification(title, {
         body: body,
-        icon: product.imageUrl || '/icon-192.png',
-        badge: '/icon-192.png',
+        icon: product.imageUrl || 'assets/logo-icon.png',
+        badge: 'assets/logo-icon.png',
         tag: `stock-${product.id}`,
         requireInteraction: true,
         data: {
@@ -1165,7 +1165,7 @@ function showStockNotification(product, type) {
     if (Notification.permission === 'granted') {
       new Notification(title, {
         body: body,
-        icon: product.imageUrl || '/icon-192.png'
+        icon: product.imageUrl || 'assets/logo-icon.png'
       });
     }
   }

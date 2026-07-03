@@ -1,16 +1,17 @@
 // Service Worker para PWA e Notificações
-const CACHE_NAME = 'produkti-v1.0.0';
+const CACHE_VERSION = 'v1.0.1';
+const CACHE_NAME = `produkti-${CACHE_VERSION}`;
+const FALLBACK_HTML = new URL('produkti.html', self.location).href;
 const urlsToCache = [
-  '/',
-  '/produkti.html',
-  '/style.css',
-  '/app.js',
-  '/firebase.js',
-  '/services/authService.js',
-  '/services/firestoreService.js',
-  '../manifest.json',
-  '../icon-192.png',
-  '../icon-512.png'
+  new URL('produkti.html', self.location).href,
+  new URL('style.css', self.location).href,
+  new URL('app.js', self.location).href,
+  new URL('firebase.js', self.location).href,
+  new URL('services/authService.js', self.location).href,
+  new URL('services/firestoreService.js', self.location).href,
+  new URL('manifest.json', self.location).href,
+  new URL('assets/logo-icon.png', self.location).href,
+  new URL('assets/logo.png', self.location).href
 ];
 
 // ===== INSTALAÇÃO =====
@@ -24,6 +25,12 @@ self.addEventListener('install', (event) => {
       })
       .then(() => self.skipWaiting())
   );
+});
+
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });
 
 // ===== ATIVAÇÃO =====
@@ -43,33 +50,51 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// ===== FETCH (CACHE FIRST) =====
+// ===== FETCH =====
 self.addEventListener('fetch', (event) => {
-  event.respondWith(
-    caches.match(event.request)
-      .then((response) => {
-        // Retorna do cache se existir
-        if (response) {
-          return response;
-        }
+  const request = event.request;
+  if (request.method !== 'GET') {
+    return;
+  }
 
-        // Busca na rede se não estiver em cache
-        return fetch(event.request).then((response) => {
-          // Não cacheia respostas não-200 ou não-GET
-          if (!response || response.status !== 200 || response.type !== 'basic' || event.request.method !== 'GET') {
-            return response;
+  const acceptHeader = request.headers.get('accept') || '';
+  const isNavigationRequest = request.mode === 'navigate' || acceptHeader.includes('text/html');
+
+  if (isNavigationRequest) {
+    event.respondWith(
+      fetch(request)
+        .then((networkResponse) => {
+          if (networkResponse && networkResponse.status === 200) {
+            const responseClone = networkResponse.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(request.url, responseClone));
           }
+          return networkResponse;
+        })
+        .catch(() => caches.match(FALLBACK_HTML))
+    );
+    return;
+  }
 
-          // Cacheia a resposta
-          const responseToCache = response.clone();
-          caches.open(CACHE_NAME)
-            .then((cache) => {
-              cache.put(event.request, responseToCache);
-            });
+  event.respondWith(
+    caches.match(request).then((cachedResponse) => {
+      if (cachedResponse) {
+        fetch(request).then((networkResponse) => {
+          if (networkResponse && networkResponse.status === 200 && networkResponse.type === 'basic') {
+            const responseToCache = networkResponse.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(request.url, responseToCache));
+          }
+        }).catch(() => {});
+        return cachedResponse;
+      }
 
-          return response;
-        });
-      })
+      return fetch(request).then((networkResponse) => {
+        if (networkResponse && networkResponse.status === 200 && networkResponse.type === 'basic') {
+          const responseToCache = networkResponse.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(request.url, responseToCache));
+        }
+        return networkResponse;
+      });
+    })
   );
 });
 
@@ -84,8 +109,8 @@ self.addEventListener('push', (event) => {
 
   const options = {
     body: data.body || 'Notificação do Produkti',
-    icon: '/icon-192.png',
-    badge: '/icon-192.png',
+    icon: 'assets/logo-icon.png',
+    badge: 'assets/logo-icon.png',
     vibrate: [200, 100, 200],
     data: data.data || {},
     actions: data.actions || [],
