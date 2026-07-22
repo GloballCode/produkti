@@ -3,9 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    
-<link rel="icon" href="assets/logo-icon.png"/>
-    <title>Política de Privacidade</title>
+    <link rel="icon" href="assets/logo-icon.png"/>
+    <title>Política de Privacidade — Produkti</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -29,6 +28,15 @@
             font-style: italic;
             margin-bottom: 20px;
         }
+        .nota {
+            background: #fdf3d8;
+            border-left: 4px solid #f5c842;
+            padding: 12px 16px;
+            margin: 16px 0;
+            font-size: 15px;
+        }
+        ul { padding-left: 22px; }
+        a { color: #3498db; }
     </style>
 </head>
 <body>
@@ -36,19 +44,70 @@
     <p class="last-updated">Última atualização: <span id="date"></span></p>
 
     <h2>1. Introdução</h2>
-    <p>Sua privacidade é importante para nós. Esta política de privacidade explica como coletamos, usamos e protegemos suas informações pessoais.</p>
+    <p>Esta Política de Privacidade explica como o <strong>Produkti</strong> ("nós", "o app") coleta, usa, armazena e protege as informações de quem usa a plataforma. Ao criar uma conta e usar o Produkti, você concorda com o que está descrito aqui.</p>
+    <p>O Produkti é um produto independente, desenvolvido e mantido por <strong>[NOME / RESPONSÁVEL PELO PRODUKTI]</strong>. Dúvidas ou solicitações sobre seus dados podem ser feitas pelos contatos na seção 9.</p>
 
-    <h2>2. Informações que Coletamos</h2>
-    <p>Coletamos informações que você nos fornece voluntariamente, como nome, email e dados de navegação através de cookies.</p>
+    <h2>2. Quais dados coletamos</h2>
+    <p>Coletamos os seguintes tipos de informação:</p>
+    <ul>
+        <li><strong>Dados de login:</strong> nome, e-mail e foto de perfil, fornecidos automaticamente pelo Google quando você entra com sua conta Google (não usamos senha própria nem outro método de login).</li>
+        <li><strong>Dados do seu negócio:</strong> nome do(s) negócio(s) que você cadastra, produtos (nome, marca, categoria, custo, estoque) e fotos de produtos.</li>
+        <li><strong>Dados de vendas:</strong> valores, formas de pagamento e histórico de transações que você registra no app.</li>
+        <li><strong>Dados de clientes do seu negócio:</strong> quando você registra uma venda (inclusive fiado), você pode informar nome e telefone do seu cliente. Esses dados pertencem a terceiros — veja a seção 6 sobre isso.</li>
+        <li><strong>Permissão de notificações:</strong> se você autorizar, usamos essa permissão do navegador para te avisar sobre estoque baixo ou esgotado.</li>
+    </ul>
+    <p>O Produkti não usa cookies de rastreamento nem ferramentas de analytics/publicidade de terceiros no momento.</p>
 
-    <h2>3. Como Usamos suas Informações</h2>
-    <p>Usamos suas informações para melhorar nossos serviços, comunicação com você e conformidade legal.</p>
+    <h2>3. Como usamos seus dados</h2>
+    <ul>
+        <li>Para autenticar sua conta e manter seus dados de negócio isolados e seguros;</li>
+        <li>Para exibir estoque, vendas, histórico e estatísticas dentro do app;</li>
+        <li>Para verificar seu período de teste gratuito e status de plano;</li>
+        <li>Para te enviar notificações de estoque, caso ativadas;</li>
+        <li>Para entrar em contato com você, quando necessário, sobre liberação de acesso pago ou suporte.</li>
+    </ul>
+    <p>Não vendemos nem compartilhamos seus dados com terceiros para fins de marketing.</p>
 
-    <h2>4. Proteção de Dados</h2>
-    <p>Implementamos medidas de segurança para proteger suas informações contra acesso não autorizado.</p>
+    <h2>4. Onde seus dados são armazenados</h2>
+    <p>Usamos os seguintes serviços de terceiros para operar o Produkti, cada um com sua própria política de privacidade:</p>
+    <ul>
+        <li><strong>Google Firebase</strong> (Authentication e Firestore) — para login e armazenamento dos dados do app;</li>
+        <li><strong>Cloudinary</strong> — para armazenamento das fotos de produtos que você envia.</li>
+    </ul>
+    <p>Esses provedores têm seus próprios padrões de segurança e certificações internacionais, e atuam apenas como operadores dos dados que processamos.</p>
 
-    <h2>5. Contato</h2>
-    <p>Para dúvidas sobre esta política, entre em contato conosco através do email: privacy@example.com</p>
+    <h2>5. Retenção e exclusão de dados</h2>
+    <ul>
+        <li>Contas em período de teste gratuito que ficarem <strong>inativas por até 2 meses</strong> têm a conta e todos os dados associados <strong>apagados permanentemente</strong>, sem aviso prévio adicional além do que constar no app.</li>
+        <li>Contas com plano pago ativo mantêm os dados enquanto a assinatura estiver ativa.</li>
+        <li>Você pode solicitar a exclusão da sua conta e de todos os seus dados a qualquer momento, entrando em contato pelos canais da seção 9.</li>
+    </ul>
+
+    <h2>6. Dados de clientes cadastrados por você (lojista)</h2>
+    <div class="nota">
+        Se você usa o Produkti para registrar vendas (inclusive fiado) de <strong>seus próprios clientes</strong>, você é responsável por ter uma base legal (geralmente o consentimento deles, ou a necessidade de execução do próprio negócio/venda) para armazenar nome, telefone e histórico de compra dessas pessoas. O Produkti apenas fornece a ferramenta de armazenamento; quem decide coletar e como usar esses dados é você, como responsável pelo seu próprio negócio perante a LGPD.
+    </div>
+
+    <h2>7. Seus direitos (LGPD)</h2>
+    <p>Como titular de dados, você tem direito a:</p>
+    <ul>
+        <li>Confirmar se tratamos seus dados e acessar quais dados temos sobre você;</li>
+        <li>Corrigir dados incompletos, inexatos ou desatualizados;</li>
+        <li>Solicitar a exclusão ou anonimização dos seus dados;</li>
+        <li>Solicitar a portabilidade dos seus dados a outro fornecedor;</li>
+        <li>Revogar o consentimento dado, quando aplicável.</li>
+    </ul>
+    <p>Para exercer qualquer desses direitos, entre em contato pelos canais abaixo.</p>
+
+    <h2>8. Alterações nesta política</h2>
+    <p>Podemos atualizar esta política conforme o Produkti evolui. A data no topo da página sempre indica a versão mais recente. Mudanças relevantes serão comunicadas dentro do próprio app, quando possível.</p>
+
+    <h2>9. Contato</h2>
+    <p>Para dúvidas, solicitações sobre seus dados, ou qualquer assunto relacionado a esta política:</p>
+    <ul>
+        <li>WhatsApp: <a href="https://wa.me/5584986634267">+55 84 98663-4267</a></li>
+        <li>E-mail: <strong>[SEU E-MAIL DE CONTATO AQUI]</strong></li>
+    </ul>
 
     <script>
         document.getElementById('date').textContent = new Date().toLocaleDateString('pt-BR');

@@ -254,7 +254,6 @@ window.deleteBusiness = async function (id) {
 
   try {
 
-    console.log(db);
     const bizRef = doc(
       db,
       "users",
@@ -475,6 +474,8 @@ window.confirmReporEstoque = async function(id) {
     const produto = state.products.find(p => p.id === id);
     const novaQtd = (produto.qtd || 0) + add;
     await updateProduct(state.currentBiz.id, state.user.uid, id, { qtd: novaQtd });
+    // Estoque mudou: limpa as flags pra notificação poder disparar de novo no futuro
+    clearStockNotificationFlags(id);
     // Fecha pelo id único em vez de querySelector genérico
     closeBottomSheet(`modal-repor-${id}`);
     await loadProductsAndSales();
@@ -578,6 +579,9 @@ async function editarProdutoFirestore(
       id,
       dados
     );
+
+    // Estoque pode ter mudado na edição: limpa as flags de notificação
+    clearStockNotificationFlags(id);
 
     await loadProductsAndSales();
 
@@ -943,19 +947,18 @@ window.finalizarVenda = async function () {
     // Salvar no Firestore
     await addSale(state.currentBiz.id, state.user.uid, sale);
 
-    // Atualizar quantidade de produtos apenas se não for fiado ou se for fiado pago
-    if (paymentMethod !== 'fiado' || fiadoStatus === 'pago') {
-      for (const item of items) {
-        const product = state.products.find(p => p.id === item.produtoId);
-        const novaQtd = product.qtd - item.quantidade;
+    // Estoque desconta sempre no momento da venda, seja fiado ou não —
+    // o produto já saiu da prateleira independente de ter sido pago.
+    for (const item of items) {
+      const product = state.products.find(p => p.id === item.produtoId);
+      const novaQtd = product.qtd - item.quantidade;
 
-        await updateProduct(
-          state.currentBiz.id,
-          state.user.uid,
-          item.produtoId,
-          { qtd: novaQtd }
-        );
-      }
+      await updateProduct(
+        state.currentBiz.id,
+        state.user.uid,
+        item.produtoId,
+        { qtd: novaQtd }
+      );
     }
 
     // Limpar formulário
@@ -1196,20 +1199,8 @@ window.marcarVendaComoPaga = async function(saleId) {
       dataPagamento: new Date().toLocaleString('pt-BR')
     });
 
-    // Atualizar quantidade dos produtos (agora que foi pago)
-    const sale = state.sales.find(s => s.id === saleId);
-    for (const item of sale.itens) {
-      const product = state.products.find(p => p.id === item.produtoId);
-      if (!product) continue;
-      const novaQtd = product.qtd - item.quantidade;
-
-      await updateProduct(
-        state.currentBiz.id,
-        state.user.uid,
-        item.produtoId,
-        { qtd: novaQtd }
-      );
-    }
+    // Estoque já foi descontado no momento da venda (fiado ou não),
+    // então aqui só atualizamos o status financeiro — sem mexer no estoque de novo.
 
     closeBottomSheet('modal-marcar-pago');
     await loadProductsAndSales();
@@ -1504,6 +1495,13 @@ async function checkLowStock() {
       localStorage.setItem(notificationId, 'true');
     }
   });
+}
+
+// Limpa as flags de notificação de um produto, para que ele possa
+// notificar de novo caso o estoque volte a ficar baixo/esgotado no futuro
+function clearStockNotificationFlags(productId) {
+  localStorage.removeItem(`low-stock-${productId}`);
+  localStorage.removeItem(`out-stock-${productId}`);
 }
 
 function showStockNotification(product, type) {
