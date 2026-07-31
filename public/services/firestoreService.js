@@ -10,6 +10,7 @@ import {
   where,
   serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { parseSaleDate } from "./salesLogic.js";
 
 // Cloudinary Configuration
 const CLOUDINARY_CLOUD_NAME = 'dkoxcuhlb'; 
@@ -132,7 +133,8 @@ export async function addSale(businessId, userId, saleData) {
       collection(db, "users", userId, "businesses", businessId, "sales"),
       {
         ...saleData,
-        createdAt: serverTimestamp()
+        createdAt: serverTimestamp(),
+        saleDate: serverTimestamp()
       }
     );
     return { id: docRef.id, ...saleData };
@@ -151,10 +153,32 @@ export async function getSales(businessId, userId) {
     querySnapshot.forEach((doc) => {
       sales.push({ id: doc.id, ...doc.data() });
     });
-    return sales.sort((a, b) => b.createdAt - a.createdAt);
+    return sales.sort((a, b) => {
+      const aTime = parseSaleDate(a)?.getTime() || 0;
+      const bTime = parseSaleDate(b)?.getTime() || 0;
+      return bTime - aTime;
+    });
   } catch (e) {
     console.error("Erro ao carregar vendas:", e);
     return [];
+  }
+}
+
+export async function deleteSale(businessId, userId, saleId) {
+  try {
+    const docRef = doc(
+      db,
+      "users",
+      userId,
+      "businesses",
+      businessId,
+      "sales",
+      saleId
+    );
+    await deleteDoc(docRef);
+  } catch (e) {
+    console.error("Erro ao deletar venda:", e);
+    throw e;
   }
 }
 

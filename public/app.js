@@ -32,9 +32,11 @@ import {
   deleteProduct,
   addSale,
   getSales,
+  deleteSale,
   uploadProductImage,
   deleteProductImage
 } from "./services/firestoreService.js";
+import { filterSalesByPeriod, parseSaleDate, summarizeSalesByMonth } from "./services/salesLogic.js";
 
 // ===== ACESSO / TRIAL / PAGAMENTO =====
 // Troque pelo seu número de WhatsApp: DDI + DDD + número, só dígitos.
@@ -220,7 +222,11 @@ window.enterBusiness = function (id) {
 
 async function loadProductsAndSales() {
   state.products = await getProducts(state.currentBiz.id, state.user.uid);
-  state.sales = await getSales(state.currentBiz.id, state.user.uid);
+  state.sales = (await getSales(state.currentBiz.id, state.user.uid)).sort((a, b) => {
+    const aTime = parseSaleDate(a)?.getTime() || 0;
+    const bTime = parseSaleDate(b)?.getTime() || 0;
+    return bTime - aTime;
+  });
   renderProducts();
   updateStats();
   renderSellPage();
@@ -605,28 +611,20 @@ window.updateStats = function () {
   const currentMonth = now.getMonth();
   const currentYear = now.getFullYear();
 
-  // Total de produtos no estoque (não filtrado por mês)
   document.getElementById('stat-produtos').textContent = state.products.length;
 
-  const salesThisMonth = state.sales.filter(s => {
-    const d = (s.createdAt && typeof s.createdAt.toDate === 'function') ? s.createdAt.toDate() : (s.createdAt ? new Date(s.createdAt) : (s.data ? new Date(s.data) : null));
-    if (!d) return false;
-    return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
-  });
-
-  const totalVendas = salesThisMonth.reduce((sum, sale) => sum + (sale.total || 0), 0);
+  const salesThisMonth = filterSalesByPeriod(state.sales, 'mes', now);
+  const totalVendas = salesThisMonth.reduce((sum, sale) => sum + (parseFloat(sale.total || 0)), 0);
   document.getElementById('stat-vendas').textContent = 'R$ ' + totalVendas.toFixed(2).replace('.', ',');
-
   document.getElementById('stat-transacoes').textContent = salesThisMonth.length;
 
-  // Lucro bruto do mês
   const lucroTotal = salesThisMonth.reduce((acc, sale) => {
     let saleLucro = 0;
     (sale.itens || []).forEach(it => {
       const prod = state.products.find(p => p.id === it.produtoId);
       const custo = prod ? parseFloat(prod.custo || 0) : 0;
       const precoVenda = parseFloat(it.preco || 0);
-      const qtd = parseInt(it.quantidade || 0);
+      const qtd = parseInt(it.quantidade || 0, 10);
       saleLucro += (precoVenda - custo) * qtd;
     });
     return acc + saleLucro;
@@ -634,11 +632,29 @@ window.updateStats = function () {
 
   document.getElementById('stat-lucro').textContent = 'R$ ' + lucroTotal.toFixed(2).replace('.', ',');
 
-  // Dízimo mensal (10% do lucro líquido do mês)
   const dizimo = lucroTotal * 0.1;
   const dizimoEl = document.getElementById('stat-dizimo');
   if (dizimoEl) {
     dizimoEl.textContent = 'R$ ' + dizimo.toFixed(2).replace('.', ',');
+  }
+
+  const historyList = document.getElementById('monthly-history-list');
+  if (historyList) {
+    const months = summarizeSalesByMonth(state.sales, state.products).slice(0, 6);
+    historyList.innerHTML = months.length
+      ? months.map((item) => `
+          <div class="monthly-history-item">
+            <div>
+              <strong>${item.label}</strong>
+              <span>${item.transactions} venda(s)</span>
+            </div>
+            <div class="monthly-history-values">
+              <span>R$ ${item.total.toFixed(2).replace('.', ',')}</span>
+              <small>Lucro R$ ${item.lucro.toFixed(2).replace('.', ',')}</small>
+            </div>
+          </div>
+        `).join('')
+      : '<p class="no-products-msg">Ainda não há vendas registradas.</p>';
   }
 };
 
@@ -802,19 +818,76 @@ window.confirmAddToCart = function(productId, modalId) {
 };
 
 // ===== VENDER: RENDERIZAR PÁGINA =====
+window.filterSellProducts = function () {
+  const search = document.getElementById('search-sell-product')?.value.toLowerCase() || '';
+  const resultsEl = document.getElementById('sell-product-results');
+  const selectEl = document.getElementById('sell-product-select');
+
+  if (!resultsEl || !selectEl) return;
+
+  const filtered = state.products.filter((product) => {
+    const haystack = `${product.nome || ''} ${product.marca || ''} ${product.tipo || ''}`.toLowerCase();
+    return haystack.includes(search) || search === '';
+  });
+
+  if (!search) {
+    resultsEl.innerHTML = '<div class="sell-product-empty">Digite para buscar produtos disponíveis.</div>';
+    return;
+  }
+
+  if (!filtered.length) {
+    resultsEl.innerHTML = '<div class="sell-product-empty">Nenhum produto encontrado.</div>';
+    return;
+  }
+
+  resultsEl.innerHTML = filtered.map((product) => `
+    <button type="button" class="sell-product-chip" onclick="selectSellProduct('${product.id}')">
+      <strong>${product.nome}</strong>
+      <span>${product.qtd} em estoque • ${product.marca || 'Sem marca'}</span>
+    </button>
+  `).join('');
+};
+
+window.selectSellProduct = function (productId) {
+  const selectEl = document.getElementById('sell-product-select');
+  const searchEl = document.getElementById('search-sell-product');
+  const product = state.products.find((item) => item.id === productId);
+
+  if (!selectEl || !product) return;
+
+  selectEl.value = productId;
+  if (searchEl) {
+    searchEl.value = product.nome;
+  }
+
+  document.getElementById('sell-product-results').innerHTML = '';
+  addToCart();
+};
+
 window.renderSellPage = function () {
   const selectEl = document.getElementById('sell-product-select');
+  const searchEl = document.getElementById('search-sell-product');
+  const resultsEl = document.getElementById('sell-product-results');
 
   selectEl.innerHTML = '<option value="">Selecione um produto</option>';
 
-    state.products.forEach(p => {
+  state.products.forEach(p => {
     const option = document.createElement('option');
     option.value = p.id;
     option.textContent = `${p.nome} (${p.qtd} em estoque) - ${p.marca || ''}`;
     selectEl.appendChild(option);
   });
 
+  if (searchEl) {
+    searchEl.value = '';
+  }
+
+  if (resultsEl) {
+    resultsEl.innerHTML = '<div class="sell-product-empty">Digite para buscar produtos disponíveis.</div>';
+  }
+
   renderCart();
+  window.filterSellProducts();
 };
 
 // ===== VENDER: RENDERIZAR CARRINHO =====
@@ -941,7 +1014,9 @@ window.finalizarVenda = async function () {
       metodoPagamento: paymentMethod,
       fiadoStatus: fiadoStatus,
       fiadoPaymentMethod: fiadoPaymentMethod,
-      pago: paymentMethod !== 'fiado' || fiadoStatus === 'pago'
+      pago: paymentMethod !== 'fiado' || fiadoStatus === 'pago',
+      valorPago: paymentMethod === 'fiado' ? 0 : total,
+      saldoRestante: paymentMethod === 'fiado' ? total : 0
     };
 
     // Salvar no Firestore
@@ -985,36 +1060,16 @@ window.finalizarVenda = async function () {
 // ===== HISTÓRICO =====
 window.renderHistorico = function () {
   const historicoList = document.getElementById('historico-list');
-  const searchTerm = document.getElementById('search-historico').value.toLowerCase();
+  const searchTerm = document.getElementById('search-historico')?.value.toLowerCase() || '';
 
   let filtered = state.sales.filter(s =>
-    s.cliente.toLowerCase().includes(searchTerm)
+    (s.cliente || '').toLowerCase().includes(searchTerm)
   );
 
-  // Aplicar filtro de data
   if (state.histFilter !== 'todas') {
-    const now = new Date();
-    filtered = filtered.filter(s => {
-      const saleDate = new Date(s.data);
-
-      switch (state.histFilter) {
-        case 'hoje':
-          return saleDate.toDateString() === now.toDateString();
-        case 'semana':
-          const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-          return saleDate >= weekAgo;
-        case 'mes':
-          return saleDate.getMonth() === now.getMonth() &&
-            saleDate.getFullYear() === now.getFullYear();
-        case 'ano':
-          return saleDate.getFullYear() === now.getFullYear();
-        default:
-          return true;
-      }
-    });
+    filtered = filterSalesByPeriod(filtered, state.histFilter, new Date());
   }
 
-  // Aplicar filtro de tipo de venda
   if (state.saleTypeFilter !== 'todas') {
     filtered = filtered.filter(s => {
       switch (state.saleTypeFilter) {
@@ -1033,38 +1088,65 @@ window.renderHistorico = function () {
     return;
   }
 
-  historicoList.innerHTML = filtered.map(sale => `
-    <div class="historico-item ${sale.metodoPagamento === 'fiado' && sale.fiadoStatus === 'nao-pago' ? 'fiado' : ''}">
-      <div class="historico-header">
-        <strong>${sale.cliente}</strong>
-        <div style="display: flex; align-items: center; gap: 8px;">
-          ${sale.metodoPagamento === 'fiado' && sale.fiadoStatus === 'nao-pago' ? '<span class="fiado-badge">Fiado</span>' : ''}
-          ${sale.pago && sale.metodoPagamento !== 'fiado' ? '<span class="pago-badge">Pago</span>' : ''}
-          ${sale.pago && sale.metodoPagamento === 'fiado' ? '<span class="pago-badge">Pago</span>' : ''}
-          <span class="historico-total">
-            R$ ${Number(sale.total || 0).toFixed(2).replace('.', ',')}
-          </span>
+  historicoList.innerHTML = filtered.map(sale => {
+    const saldoRestante = getSaleBalance(sale);
+    const isOpenFiado = sale.metodoPagamento === 'fiado' && saldoRestante > 0;
+
+    return `
+      <div class="historico-item ${isOpenFiado ? 'fiado' : ''}">
+        <div class="historico-header">
+          <strong>${sale.cliente}</strong>
+          <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end;">
+            ${isOpenFiado ? '<span class="fiado-badge">Fiado</span>' : ''}
+            ${sale.pago && sale.metodoPagamento !== 'fiado' ? '<span class="pago-badge">Pago</span>' : ''}
+            ${sale.pago && sale.metodoPagamento === 'fiado' ? '<span class="pago-badge">Pago</span>' : ''}
+            <span class="historico-total">
+              R$ ${Number(sale.total || 0).toFixed(2).replace('.', ',')}
+            </span>
+          </div>
+        </div>
+        <div class="historico-meta">
+          <span>${sale.data || (parseSaleDate(sale)?.toLocaleString('pt-BR') || '')}</span>
+          <span>${(sale.itens || []).length} item(ns)</span>
+          <span>Método: ${getPaymentMethodLabel(sale)}</span>
+          ${isOpenFiado ? `<span class="badge-novo">Saldo: R$ ${saldoRestante.toFixed(2).replace('.', ',')}</span>` : ''}
+          ${sale.primeiraCompra ? '<span class="badge-novo">Primeira compra</span>' : ''}
+        </div>
+        <div class="historico-itens">
+          ${(sale.itens || []).map(item => `
+            <span>${item.nome} (x${item.quantidade})</span>
+          `).join('')}
+        </div>
+        <div class="historico-actions">
+          <strong style="margin-right:8px">Lucro: R$ ${(sale.lucro||0).toFixed(2).replace('.',',')}</strong>
+          ${sale.telefone && sale.telefone !== 'N/A' ? `<button class="btn-link" onclick="showClientPhone('${sale.telefone}')">📞 Ver telefone</button>` : ''}
+          ${isOpenFiado ? `<button class="btn-link" onclick="abaterVendaFiada('${sale.id}')">💰 Abater valor</button>` : ''}
+          ${sale.metodoPagamento === 'fiado' && sale.fiadoStatus === 'nao-pago' ? `<button class="btn-link" onclick="editarVendaFiada('${sale.id}')">✏️ Marcar como pago</button>` : ''}
+          <button class="btn-link" onclick="viewSaleDetails('${sale.id}')">🔎 Ver detalhes</button>
+          <button class="btn-link danger" onclick="excluirVenda('${sale.id}')">🗑️ Excluir</button>
         </div>
       </div>
-      <div class="historico-meta">
-        <span>${sale.data}</span>
-        <span>${sale.itens.length} item(ns)</span>
-        <span>Método: ${getPaymentMethodLabel(sale)}</span>
-        ${sale.primeiraCompra ? '<span class="badge-novo">Primeira compra</span>' : ''}
-      </div>
-      <div class="historico-itens">
-        ${sale.itens.map(item => `
-          <span>${item.nome} (x${item.quantidade})</span>
-        `).join('')}
-      </div>
-      <div class="historico-actions">
-        <strong style="margin-right:8px">Lucro: R$ ${(sale.lucro||0).toFixed(2).replace('.',',')}</strong>
-        ${sale.telefone && sale.telefone !== 'N/A' ? `<button class="btn-link" onclick="showClientPhone('${sale.telefone}')">📞 Ver telefone</button>` : ''}
-        ${sale.metodoPagamento === 'fiado' && sale.fiadoStatus === 'nao-pago' ? `<button class="btn-link" onclick="editarVendaFiada('${sale.id}')">✏️ Marcar como pago</button>` : ''}
-        <button class="btn-link" onclick="viewSaleDetails('${sale.id}')">🔎 Ver detalhes</button>
-      </div>
-    </div>
-  `).join('');
+    `;
+  }).join('');
+};
+
+window.excluirVenda = async function (saleId) {
+  const sale = state.sales.find(s => s.id === saleId);
+  if (!sale) return showToast('Venda não encontrada');
+
+  const confirmed = confirm(`Deseja excluir a venda de ${sale.cliente}?`);
+  if (!confirmed) return;
+
+  try {
+    await deleteSale(state.currentBiz.id, state.user.uid, saleId);
+    state.sales = state.sales.filter(s => s.id !== saleId);
+    renderHistorico();
+    updateStats();
+    showToast('🗑️ Venda removida');
+  } catch (error) {
+    console.error('Erro ao excluir venda:', error);
+    showToast('❌ Erro ao excluir venda');
+  }
 };
 
 window.viewSaleDetails = function(saleId) {
@@ -1119,12 +1201,24 @@ window.viewSaleDetails = function(saleId) {
   `);
 };
 
+function getSaleBalance(sale) {
+  if (sale.metodoPagamento !== 'fiado') return 0;
+
+  const total = parseFloat(sale.total || 0);
+  const paid = parseFloat(sale.valorPago || 0);
+  const storedRemaining = parseFloat(sale.saldoRestante || 0);
+
+  if (storedRemaining > 0) return storedRemaining;
+  return Math.max(0, total - paid);
+}
+
 function getPaymentMethodLabel(sale) {
   if (sale.metodoPagamento === 'fiado') {
-    if (sale.fiadoStatus === 'pago') {
-      return `Fiado (${sale.fiadoPaymentMethod})`;
+    const balance = getSaleBalance(sale);
+    if (balance <= 0) {
+      return 'Fiado (Quitado)';
     }
-    return 'Fiado (Não pago)';
+    return `Fiado (${balance.toFixed(2).replace('.', ',')} restante)`;
   }
   return sale.metodoPagamento;
 }
@@ -1149,6 +1243,80 @@ window.showClientPhone = function(phone) {
       <button class="bs-btn-confirm" onclick="closeBottomSheet('modal-phone')">Fechar</button>
     </div>
   `);
+};
+
+window.abaterVendaFiada = function(saleId) {
+  const sale = state.sales.find(s => s.id === saleId);
+  if (!sale) return;
+
+  const saldoRestante = getSaleBalance(sale);
+
+  openBottomSheet('modal-abater-fiado', `
+    <div class="bs-handle"></div>
+    <div class="bs-header">
+      <div class="bs-title-wrap">
+        <div class="bs-icon bs-icon--green"><i class="bi bi-cash-stack"></i></div>
+        <h3 class="bs-title">Abater valor</h3>
+      </div>
+      <button class="bs-close" onclick="closeBottomSheet('modal-abater-fiado')"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div class="bs-product-info">
+      <span class="bs-product-name">${sale.cliente}</span>
+      <span class="bs-stock-badge">Saldo restante: <strong>R$ ${saldoRestante.toFixed(2).replace('.', ',')}</strong></span>
+    </div>
+    <div class="bs-body">
+      <label class="bs-label">Valor recebido hoje</label>
+      <input type="number" id="abater-valor" class="bs-input" min="0.01" step="0.01" placeholder="0,00" />
+      <label class="bs-label" style="margin-top:12px">Como foi pago?</label>
+      <div class="bs-select-wrap">
+        <select id="abater-payment-method" class="bs-input">
+          <option value="especie">💵 Espécie</option>
+          <option value="cartao">💳 Cartão</option>
+          <option value="pix">📱 PIX</option>
+        </select>
+        <i class="bi bi-chevron-down"></i>
+      </div>
+    </div>
+    <div class="bs-footer">
+      <button class="bs-btn-cancel" onclick="closeBottomSheet('modal-abater-fiado')">Cancelar</button>
+      <button class="bs-btn-confirm bs-btn-confirm--green" onclick="confirmarAbatimentoVenda('${saleId}')"><i class="bi bi-check-lg"></i> Registrar abatimento</button>
+    </div>
+  `);
+};
+
+window.confirmarAbatimentoVenda = async function(saleId) {
+  const sale = state.sales.find(s => s.id === saleId);
+  if (!sale) return showToast('Venda não encontrada');
+
+  const valor = parseFloat(document.getElementById('abater-valor').value.replace(',', '.') || '0');
+  const paymentMethod = document.getElementById('abater-payment-method').value;
+  const saldoRestante = getSaleBalance(sale);
+
+  if (isNaN(valor) || valor <= 0) return showToast('❌ Digite um valor válido');
+  if (valor > saldoRestante) return showToast('❌ O valor não pode passar o saldo restante');
+
+  try {
+    const saleRef = doc(db, 'users', state.user.uid, 'businesses', state.currentBiz.id, 'sales', saleId);
+    const novoValorPago = parseFloat(sale.valorPago || 0) + valor;
+    const novoSaldoRestante = Math.max(0, parseFloat(sale.total || 0) - novoValorPago);
+    const ficouQuitado = novoSaldoRestante <= 0;
+
+    await updateDoc(saleRef, {
+      valorPago: novoValorPago,
+      saldoRestante: novoSaldoRestante,
+      pago: ficouQuitado,
+      fiadoStatus: ficouQuitado ? 'pago' : 'nao-pago',
+      fiadoPaymentMethod: sale.fiadoPaymentMethod || paymentMethod,
+      dataPagamento: ficouQuitado ? new Date().toLocaleString('pt-BR') : sale.dataPagamento || new Date().toLocaleString('pt-BR')
+    });
+
+    closeBottomSheet('modal-abater-fiado');
+    await loadProductsAndSales();
+    showToast('✅ Abatimento registrado');
+  } catch (error) {
+    console.error('Erro ao registrar abatimento:', error);
+    showToast('❌ Erro ao registrar abatimento');
+  }
 };
 
 window.editarVendaFiada = function(saleId) {
@@ -1190,17 +1358,15 @@ window.marcarVendaComoPaga = async function(saleId) {
   const paymentMethod = document.getElementById('edit-payment-method').value;
 
   try {
-    // ✅ Path correto seguindo o padrão do app (users/{uid}/businesses/{bizId}/sales/{saleId})
     const saleRef = doc(db, 'users', state.user.uid, 'businesses', state.currentBiz.id, 'sales', saleId);
     await updateDoc(saleRef, {
       pago: true,
       fiadoStatus: 'pago',
       fiadoPaymentMethod: paymentMethod,
-      dataPagamento: new Date().toLocaleString('pt-BR')
+      dataPagamento: new Date().toLocaleString('pt-BR'),
+      valorPago: parseFloat(state.sales.find(s => s.id === saleId)?.total || 0),
+      saldoRestante: 0
     });
-
-    // Estoque já foi descontado no momento da venda (fiado ou não),
-    // então aqui só atualizamos o status financeiro — sem mexer no estoque de novo.
 
     closeBottomSheet('modal-marcar-pago');
     await loadProductsAndSales();

@@ -96,24 +96,23 @@
       <div class="stat-card">
         <div class="stat-icon orange"><i class="bi bi-box-seam"></i></div>
         <h3 id="stat-produtos">0</h3>
-        <p>Produtos</p>
+        <p>Produtos cadastrados</p>
       </div>
       <div class="stat-card">
         <div class="stat-icon yellow"><i class="bi bi-cash-coin"></i></div>
         <h3 id="stat-vendas">R$ 0</h3>
-        <p>Vendas (mês)</p>
+        <p>Vendas do mês</p>
       </div>
       <div class="stat-card">
         <div class="stat-icon green"><i class="bi bi-graph-up-arrow"></i></div>
         <h3 id="stat-transacoes">0</h3>
-        <p>Transações (mês)</p>
+        <p>Transações do mês</p>
       </div>
       <div class="stat-card">
         <div class="stat-icon red"><i class="bi bi-bar-chart-fill"></i></div>
         <h3 id="stat-lucro">R$ 0,00</h3>
-        <p>Lucro Bruto (mês)</p>
+        <p>Lucro bruto do mês</p>
       </div>
-      <!-- Dízimo — full width -->
       <div class="stat-card dizimo">
         <div class="stat-icon purple"><i class="bi bi-heart-fill"></i></div>
         <div class="dizimo-info">
@@ -122,6 +121,14 @@
           <span class="dizimo-desc">10% do lucro bruto mensal</span>
         </div>
       </div>
+    </div>
+
+    <div class="dashboard-section">
+      <div class="dashboard-section-header">
+        <div class="dashboard-section-title">Resumo mensal</div>
+        <button class="btn-link small" type="button" onclick="navTo('historico')">Ver histórico</button>
+      </div>
+      <div id="monthly-history-list" class="monthly-history-list"></div>
     </div>
 
     <!-- Busca -->
@@ -165,6 +172,11 @@
     <div class="page-title">Nova Venda</div>
 
     <div class="section-label">Produto</div>
+    <div class="search-wrap sell-search">
+      <i class="bi bi-search"></i>
+      <input type="text" placeholder="Buscar produto…" id="search-sell-product" oninput="filterSellProducts()" />
+    </div>
+    <div id="sell-product-results" class="sell-product-results"></div>
     <div class="dropdown-wrap">
       <select id="sell-product-select" onchange="addToCart()">
         <option value="">Selecione um produto…</option>
