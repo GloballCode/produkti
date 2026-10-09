@@ -1,22 +1,13 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Apenas usuários autenticados podem acessar seus próprios dados
-    match /users/{userId}/{document=**} {
-      allow read, write: if request.auth.uid == userId;
-    }
-  }
-}
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
 
     function isOwner(userId) {
       return request.auth != null && request.auth.uid == userId;
     }
 
     // Acesso liberado = plano pago OU dentro do trial.
-    // ⚠️ Mantenha os 7 dias iguais ao TRIAL_DAYS do app.js.
+    // Mantenha os 7 dias iguais ao TRIAL_DAYS do app.js.
     function hasAccess(userId) {
       let u = get(/databases/$(database)/documents/users/$(userId)).data;
       return u.get('plan', '') == 'paid'
@@ -38,7 +29,7 @@ service cloud.firestore {
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['createdAt'])
         && request.resource.data.createdAt == request.time;
 
-      // O plano ("paid") só muda pelo Console do Firebase ou Admin SDK / Cloud Function.
+      // O plano ("paid") só muda pelo Console do Firebase ou Admin SDK.
       allow delete: if false;
 
       // Dados do negócio (produtos, vendas, comprovantes...): ler sempre; escrever só com acesso ativo.
