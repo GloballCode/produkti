@@ -32,6 +32,13 @@ export function parseSaleDate(sale) {
 }
 
 export function getSaleProfit(sale, products) {
+  // Usa o lucro gravado no momento da venda. Recalcular com o custo ATUAL do produto
+  // mudava o histórico ao editar o custo e zerava o custo de produtos deletados.
+  if (sale.lucro !== undefined && sale.lucro !== null && Number.isFinite(Number(sale.lucro))) {
+    return Number(sale.lucro);
+  }
+
+  // vendas muito antigas, sem lucro gravado
   return (sale.itens || []).reduce((acc, item) => {
     const product = products.find((p) => p.id === item.produtoId);
     const custo = product ? parseFloat(product.custo || 0) : 0;

@@ -12,6 +12,7 @@
 <link rel="manifest" href="./manifest.json" />
 <link rel="apple-touch-icon" href="./assets/logo-icon.png" />
 <meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="default" />
 <meta name="apple-mobile-web-app-title" content="Produkti" />
 <link rel="icon" href="assets/logo-icon.png"/>
@@ -53,7 +54,7 @@
   <button class="btn-gold" onclick="openModal('modal-new-biz')">
     <i class="bi bi-plus-lg"></i> Novo negócio
   </button>
-  <button class="btn-link" onclick="showScreen('screen-login')">Sair da conta</button>
+  <button class="btn-link" onclick="logoutUser()">Sair da conta</button>
 
   <!-- Banner de instalação PWA -->
   <div id="pwa-install-banner">
@@ -251,6 +252,16 @@
           </label>
         </div>
       </div>
+    </div>
+
+    <!-- Comprovante (obrigatório quando o pagamento recebido é PIX) -->
+    <div id="sale-receipt-wrap" style="display:none">
+      <div class="section-label">Comprovante do PIX <span style="color:var(--red)">*</span></div>
+      <label class="receipt-upload">
+        <i class="bi bi-paperclip"></i>
+        <span data-default="Anexar comprovante (imagem ou PDF)">Anexar comprovante (imagem ou PDF)</span>
+        <input type="file" id="sale-receipt-file" accept="image/*,application/pdf" onchange="onReceiptPicked(this)" />
+      </label>
     </div>
 
     <div class="toggle-row">

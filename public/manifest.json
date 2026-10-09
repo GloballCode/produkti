@@ -2,7 +2,8 @@
   "name": "Produkti - Gestão de Produtos",
   "short_name": "Produkti",
   "description": "Sistema completo para gestão de produtos e vendas",
-  "start_url": "/",
+  "id": "/produkti.html",
+  "start_url": "/produkti.html",
   "display": "standalone",
   "background_color": "#fdf8ee",
   "theme_color": "#f5c842",
@@ -10,19 +11,28 @@
   "scope": "/",
   "icons": [
     {
-      "src": "./assets/logo-icon.png",
+      "src": "./assets/icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
     },
     {
-      "src": "./assets/logo.png",
+      "src": "./assets/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "./assets/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ],
-  "categories": ["business", "productivity"],
+  "categories": [
+    "business",
+    "productivity"
+  ],
   "lang": "pt-BR",
   "dir": "ltr"
 }

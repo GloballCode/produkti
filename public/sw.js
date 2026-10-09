@@ -1,5 +1,5 @@
 // Service Worker para PWA e Notificações
-const CACHE_VERSION = 'v1.0.1';
+const CACHE_VERSION = 'v1.1.0';
 const CACHE_NAME = `produkti-${CACHE_VERSION}`;
 const FALLBACK_HTML = new URL('produkti.html', self.location).href;
 const urlsToCache = [
@@ -7,12 +7,26 @@ const urlsToCache = [
   new URL('style.css', self.location).href,
   new URL('app.js', self.location).href,
   new URL('firebase.js', self.location).href,
+  new URL('config.js', self.location).href,
+  new URL('services/salesLogic.js', self.location).href,
+  new URL('services/receiptService.js', self.location).href,
   new URL('services/authService.js', self.location).href,
   new URL('services/firestoreService.js', self.location).href,
   new URL('manifest.json', self.location).href,
   new URL('assets/logo-icon.png', self.location).href,
-  new URL('assets/logo.png', self.location).href
+  new URL('assets/logo.png', self.location).href,
+  new URL('assets/icon-192.png', self.location).href,
+  new URL('assets/icon-512.png', self.location).href
 ];
+
+// Cacheia arquivos do próprio site e as libs de CDN (Firebase/ícones/fontes),
+// para o app abrir offline.
+const CDN_HOSTS = ['www.gstatic.com', 'cdn.jsdelivr.net', 'fonts.gstatic.com'];
+function isCacheable(response, request) {
+  if (!response || response.status !== 200) return false;
+  if (response.type === 'basic') return true;
+  return response.type === 'cors' && CDN_HOSTS.includes(new URL(request.url).hostname);
+}
 
 // ===== INSTALAÇÃO =====
 self.addEventListener('install', (event) => {
@@ -21,7 +35,8 @@ self.addEventListener('install', (event) => {
     caches.open(CACHE_NAME)
       .then((cache) => {
         console.log('Service Worker: Cacheando arquivos...');
-        return cache.addAll(urlsToCache);
+        // allSettled: um arquivo ausente não derruba a instalação inteira
+        return Promise.allSettled(urlsToCache.map((url) => cache.add(url)));
       })
       .then(() => self.skipWaiting())
   );
@@ -79,7 +94,7 @@ self.addEventListener('fetch', (event) => {
     caches.match(request).then((cachedResponse) => {
       if (cachedResponse) {
         fetch(request).then((networkResponse) => {
-          if (networkResponse && networkResponse.status === 200 && networkResponse.type === 'basic') {
+          if (isCacheable(networkResponse, request)) {
             const responseToCache = networkResponse.clone();
             caches.open(CACHE_NAME).then((cache) => cache.put(request.url, responseToCache));
           }
@@ -88,7 +103,7 @@ self.addEventListener('fetch', (event) => {
       }
 
       return fetch(request).then((networkResponse) => {
-        if (networkResponse && networkResponse.status === 200 && networkResponse.type === 'basic') {
+        if (isCacheable(networkResponse, request)) {
           const responseToCache = networkResponse.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put(request.url, responseToCache));
         }
@@ -133,7 +148,7 @@ self.addEventListener('notificationclick', (event) => {
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true })
       .then((clientList) => {
-        const url = event.notification.data?.url || '/';
+        const url = event.notification.data?.url || FALLBACK_HTML;
 
         for (let i = 0; i < clientList.length; i++) {
           const client = clientList[i];

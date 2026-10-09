@@ -7,3 +7,45 @@ service cloud.firestore {
     }
   }
 }
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isOwner(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
+
+    // Acesso liberado = plano pago OU dentro do trial.
+    // ⚠️ Mantenha os 7 dias iguais ao TRIAL_DAYS do app.js.
+    function hasAccess(userId) {
+      let u = get(/databases/$(database)/documents/users/$(userId)).data;
+      return u.get('plan', '') == 'paid'
+        || ('createdAt' in u && request.time < u.createdAt + duration.value(7, 'd'));
+    }
+
+    match /users/{userId} {
+      allow read: if isOwner(userId);
+
+      // Conta nova: só pode nascer como trial, com a data do servidor.
+      allow create: if isOwner(userId)
+        && request.resource.data.keys().hasOnly(['createdAt', 'plan'])
+        && request.resource.data.plan == 'trial'
+        && request.resource.data.createdAt == request.time;
+
+      // Conta antiga sem createdAt: só pode gravar o createdAt (nunca mexer no plano).
+      allow update: if isOwner(userId)
+        && !('createdAt' in resource.data)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['createdAt'])
+        && request.resource.data.createdAt == request.time;
+
+      // O plano ("paid") só muda pelo Console do Firebase ou Admin SDK / Cloud Function.
+      allow delete: if false;
+
+      // Dados do negócio (produtos, vendas, comprovantes...): ler sempre; escrever só com acesso ativo.
+      match /businesses/{businessId}/{document=**} {
+        allow read: if isOwner(userId);
+        allow write: if isOwner(userId) && hasAccess(userId);
+      }
+    }
+  }
+}
